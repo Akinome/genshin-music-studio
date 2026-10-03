@@ -37,6 +37,7 @@ demucs_pipeline_test/
 demucs_piano_test/
 crepe_test/
 winui_test_out/
+release/
 
 # Audio and downloaded media
 *.wav

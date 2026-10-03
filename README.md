@@ -32,65 +32,9 @@ $env:GENSHIN_BACKUP_DIR = "D:\Music\不可播备份"
 
 未设置时会回退到项目下的 `示例谱库` 目录。
 
-## 图形界面
-
-双击 `启动原神琴谱转换器.bat`，或运行：
-
-```powershell
-python genshin_midi_gui.py
-```
-
-界面支持选择单个 MIDI 或整个文件夹，预览统计，批量转换，并可直接打开输出目录。默认使用“纯旋律 + 保持原曲时长”。
-
-当前已经生成好的推荐谱子位于：
-
-```text
-优化完成_原神可用
-├── 成熟原琴        (72 首)
-├── 不可播备份      (35 首)
-└── 全部转换报告.csv
-```
-
-该目录是纯旋律版：107 首全部校验通过，只保留主旋律，时长比例均为 `1.000000`，最短按键间隔 `60.417ms`。
-
-其他版本：
-
-- `优化完成_和弦简化_时长匹配`：保留简化和弦，时长不变。
-- `旧_零丢音_时长会变`：保留全部音符，但歌曲时长会变长。
-
-## 完整音乐工作台
-
-双击 `启动原神音乐工作台.bat`，或运行：
-
-```powershell
-python genshin_music_studio.py
-```
-
-工作台包含：
-
-- 现代 CustomTkinter 界面：侧边栏、深色模式、始终可见的停止按钮
-- 视频/音频下载：使用 `yt-dlp` + `ffmpeg`
-- AI 扒谱：使用 `basic-pitch`
-- 原神主旋律提取与 MIDI 转换
-- 本地媒体、MIDI 文件处理
-- 依赖状态检测和现有谱库浏览
-
-当前机器已检测到 `yt-dlp`、`ffmpeg`、`uv`，并已创建独立 AI 环境 `.venv-ai`：
-
-```powershell
-uv venv --python 3.11 .venv-ai
-uv pip install --python .venv-ai\Scripts\python.exe -U basic-pitch yt-dlp librosa soundfile "setuptools<81"
-```
-
-也可以在“环境与安装”页点击“一键使用 uv 安装/更新 AI 环境”，或双击 `安装AI扒谱环境_uv.bat`。
-
-程序会优先调用 `.venv-ai` 中的 `basic-pitch` 做复音 AI 扒谱；如果它不可用，会自动回退到 `librosa pyin` 主旋律扒谱。
-
-新版界面入口是 `genshin_music_studio.py`，旧版保留在 `genshin_music_studio_legacy.py`。停止按钮现在会终止当前进程树，yt-dlp、ffmpeg 和 TensorFlow 子进程都会被清理。
-
 ## WinUI 3 原生版
 
-推荐架构已经落地：WinUI 3 负责原生界面，Python 负责下载、AI 扒谱和 MIDI 转换。
+桌面应用入口：WinUI 3 负责原生界面，Python 后端负责高级模型、下载和 MIDI 后处理。
 
 ```powershell
 dotnet run --project GenshinMusicStudio.WinUI\GenshinMusicStudio.WinUI.csproj -c Debug
@@ -104,6 +48,23 @@ dotnet run --project GenshinMusicStudio.WinUI\GenshinMusicStudio.WinUI.csproj -c
 - NavigationView 页面导航
 - `studio_backend.py` JSON-lines 后端
 - C# `Process.Kill(entireProcessTree: true)` 停止整个后端进程树
+
+### Release 打包
+
+运行以下命令生成自包含 Windows x64 发布目录和 ZIP：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging\package_release.ps1
+```
+
+输出文件：
+
+```text
+release\GenshinMusicStudio-win-x64\
+release\GenshinMusicStudio-win-x64.zip
+```
+
+基础 ONNX 扒谱不依赖 Python。钢琴模型、Demucs 和 CREPE 可通过发布包中的 `install_ai_env_uv.bat` 安装。
 
 ### 原生 ONNX 扒谱
 

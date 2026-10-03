@@ -29,7 +29,7 @@ def conversion_config(min_gap_ms=60, melody_only=True, preserve_duration=True, l
 
 
 def convert_midi(midi_path, out_dir, cfg, track_index=0):
-    from genshin_midi_gui import convert_one_file
+    from conversion_modes import convert_one_file
     return convert_one_file(midi_path, cfg, out_dir, track_index, True)
 
 
@@ -159,4 +159,3 @@ def process_url(url, work_dir, out_dir, cfg, cookies_file="", browser="", allow_
 
 def process_midi_file(midi_path, out_dir, cfg, track_index=0):
     return publish_triple_output(midi_path, out_dir, cfg)
-

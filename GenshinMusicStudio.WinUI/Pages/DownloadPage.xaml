@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="GenshinMusicStudio_WinUI.Pages.DownloadPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+    <ScrollViewer>
+        <StackPanel Padding="24,18,24,24" Spacing="14">
+            <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="链接一键处理" />
+            <TextBlock Text="下载音频或视频，调用 Basic Pitch 扒谱，再提取成原神纯旋律 MIDI。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+            <Border Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="视频链接" FontWeight="SemiBold" />
+                    <TextBox x:Name="UrlBox" Height="130" AcceptsReturn="True" TextWrapping="Wrap" PlaceholderText="每行一个链接，例如 https://www.bilibili.com/video/..." />
+                </StackPanel>
+            </Border>
+
+            <Border Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="工作目录" FontWeight="SemiBold" />
+                    <Grid ColumnSpacing="8" RowSpacing="8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <TextBlock Text="下载/中间文件" VerticalAlignment="Center" Margin="0,4,8,4" />
+                        <TextBox x:Name="WorkBox" Grid.Column="1" />
+                        <Button Grid.Column="2" Content="选择" Click="BrowseWork_Click" />
+                        <Button Grid.Column="3" Content="打开" Click="OpenWork_Click" />
+                        <TextBlock Grid.Row="1" Text="原神 MIDI 输出" VerticalAlignment="Center" Margin="0,4,8,4" />
+                        <TextBox x:Name="OutputBox" Grid.Row="1" Grid.Column="1" />
+                        <Button Grid.Row="1" Grid.Column="2" Content="选择" Click="BrowseOutput_Click" />
+                        <Button Grid.Row="1" Grid.Column="3" Content="打开" Click="OpenOutput_Click" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Grid ColumnSpacing="14">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="3*"/><ColumnDefinition Width="2*"/></Grid.ColumnDefinitions>
+                <Border Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="下载选项" FontWeight="SemiBold" />
+                        <Grid ColumnSpacing="8" RowSpacing="8">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <TextBlock Text="Cookies 文件" VerticalAlignment="Center" />
+                            <TextBox x:Name="CookiesBox" Grid.Column="1" PlaceholderText="例如 cookies.txt" />
+                            <Button Grid.Column="2" Content="选择" Click="BrowseCookies_Click" />
+                            <TextBlock Grid.Row="1" Text="浏览器 Cookies" VerticalAlignment="Center" />
+                            <ComboBox x:Name="BrowserBox" Grid.Row="1" Grid.Column="1" SelectedIndex="0">
+                                <ComboBoxItem Content="不使用" />
+                                <ComboBoxItem Content="chrome" />
+                                <ComboBoxItem Content="edge" />
+                                <ComboBoxItem Content="firefox" />
+                            </ComboBox>
+                            <CheckBox x:Name="PlaylistBox" Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Content="下载整个播放列表" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="1" Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="转换选项" FontWeight="SemiBold" />
+                        <CheckBox x:Name="MelodyBox" Content="只保留主旋律" IsChecked="True" />
+                        <CheckBox x:Name="PreserveBox" Content="保持原曲时长" IsChecked="True" />
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="110"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="最短按键间隔 (ms)" VerticalAlignment="Center" />
+                            <NumberBox x:Name="MinGapBox" Grid.Column="1" Value="60" Minimum="20" Maximum="200" SpinButtonPlacementMode="Compact" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Border Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
+                <Grid ColumnSpacing="8" HorizontalAlignment="Stretch">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="220" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="DownloadAudioButton" Content="下载音频" Click="DownloadAudio_Click" />
+                    <Button x:Name="DownloadVideoButton" Grid.Column="1" Content="下载视频" Click="DownloadVideo_Click" />
+                    <Button x:Name="TranscribeOnlyButton" Grid.Column="2" Content="仅 AI 扒谱（不转换）" Click="TranscribeOnly_Click" />
+                    <Button x:Name="FullPipelineButton" Grid.Column="3" Content="下载 + AI扒谱 + 转换" Style="{StaticResource AccentButtonStyle}" Click="FullPipeline_Click" />
+                    <TextBlock Grid.Column="5" Text="AI 模型" VerticalAlignment="Center" Margin="8,0,0,0" />
+                    <ComboBox x:Name="ModelBox" Grid.Column="6" SelectedIndex="0" HorizontalAlignment="Stretch" ToolTipService.ToolTip="选择 AI 扒谱模型">
+                        <ComboBoxItem Content="Basic Pitch ONNX（原生复音）" Tag="basic_pitch_onnx" />
+                        <ComboBoxItem Content="Basic Pitch Python（复音）" Tag="basic_pitch_python" />
+                        <ComboBoxItem Content="Piano Transcription（钢琴专用）" Tag="piano_transcription" />
+                        <ComboBoxItem Content="Demucs 人声 + Basic Pitch" Tag="demucs_vocals_basic" />
+                        <ComboBoxItem Content="Demucs 伴奏 + Piano" Tag="demucs_accompaniment_piano" />
+                        <ComboBoxItem Content="Demucs 人声 + CREPE" Tag="demucs_vocals_crepe" />
+                        <ComboBoxItem Content="CREPE 单音旋律" Tag="crepe" />
+                        <ComboBoxItem Content="librosa pyin（主旋律）" Tag="librosa_pyin" />
+                    </ComboBox>
+                </Grid>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

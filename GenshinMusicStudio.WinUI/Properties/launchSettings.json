@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "GenshinMusicStudio.WinUI (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "GenshinMusicStudio.WinUI (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

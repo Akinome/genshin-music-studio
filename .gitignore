@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.venv-ai/
+venv/
+.pytest_cache/
+
+# .NET / WinUI
+GenshinMusicStudio.WinUI/bin/
+GenshinMusicStudio.WinUI/obj/
+NativeInferenceTest/bin/
+NativeInferenceTest/obj/
+
+# Reference repositories
+references/
+
+# Generated output and workspaces
+工作区/
+AI扒谱输出/
+本地处理输出/
+converted_backup/
+优化完成_原神可用/
+优化完成_和弦简化_时长匹配/
+旧_零丢音_时长会变/
+stems/
+transcription/
+py_vs_native/
+symbolic_test/
+triple_test/
+local_path_test/
+melody_improved_test/
+piano_test/
+piano_backend_test/
+demucs_test/
+demucs_pipeline_test/
+demucs_piano_test/
+crepe_test/
+winui_test_out/
+
+# Audio and downloaded media
+*.wav
+*.mp3
+*.m4a
+*.flac
+*.ogg
+*.webm
+*.mp4
+*.mkv
+
+# Model weights downloaded separately
+*.pth
+*.tflite
+*.mlpackage/
+*.onnx
+!GenshinMusicStudio.WinUI/Assets/Models/nmp.onnx
+
+# Local test MIDI and screenshots
+native_*.mid
+native_bird_*.mid
+sample_genshin.mid
+winui_*.png
+studio_*.png
+modern_ui_*.png
+GenshinMusicStudio.WinUI/Assets/app_icon_preview.png
+
+# Original local logo; the public app icon source lives under WinUI Assets
+ai扒谱原琴logo.png

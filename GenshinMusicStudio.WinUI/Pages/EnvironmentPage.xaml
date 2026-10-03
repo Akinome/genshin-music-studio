@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="GenshinMusicStudio_WinUI.Pages.EnvironmentPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+    <ScrollViewer>
+        <StackPanel Padding="24,18,24,24" Spacing="14">
+            <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="环境与安装" />
+            <TextBlock Text="查看下载器和 AI 扒谱依赖，或通过 uv 安装独立 Python 环境。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+            <Border Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="依赖状态" FontWeight="SemiBold" />
+                    <StackPanel x:Name="DependencyPanel" Spacing="6" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="RefreshButton" Content="重新检测" Click="Refresh_Click" />
+                        <Button x:Name="InstallButton" Content="使用 uv 安装/更新 AI 环境" Style="{StaticResource AccentButtonStyle}" Click="Install_Click" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="AI 环境说明" FontWeight="SemiBold" />
+                    <TextBlock Text="推荐使用 uv 创建 Python 3.11 独立环境。Basic Pitch 负责复音扒谱，librosa 作为内置旋律兜底。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBox x:Name="CommandBox" AcceptsReturn="True" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" Height="90"
+                             Text="uv venv --python 3.11 .venv-ai&#x0a;uv pip install --python .venv-ai\Scripts\python.exe -U basic-pitch yt-dlp librosa soundfile &quot;setuptools&lt;81&quot;" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

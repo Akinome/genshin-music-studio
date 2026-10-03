@@ -1,0 +1,15 @@
+{
+  "range": {
+    "low": 48,
+    "high": 83
+  },
+  "transpose_semitones": 0,
+  "chord_mode": "arpeggio",
+  "arpeggio_gap_ms": 25,
+  "press_ms": 120,
+  "tempo_scale": 1.0,
+  "min_gap_ms": 60,
+  "chord_window_ms": 30,
+  "auto_slow": true,
+  "quantize_ms": 0
+}

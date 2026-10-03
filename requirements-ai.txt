@@ -1,0 +1,14 @@
+mido
+yt-dlp
+librosa
+soundfile
+customtkinter
+# 可选的高质量复音模型；Python 3.12 下可能无法安装：
+# basic-pitch
+# 可选钢琴专用模型（建议安装到 .venv-ai）：
+# piano_transcription_inference
+# torch
+# torchaudio
+# 可选混合歌曲分离与单音旋律模型：
+# demucs
+# torchcrepe

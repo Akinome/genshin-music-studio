@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="GenshinMusicStudio_WinUI.Pages.LibraryPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+    <ScrollViewer>
+        <StackPanel Padding="24,18,24,24" Spacing="14">
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel Spacing="2">
+                    <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="我的谱库" />
+                    <TextBlock Text="曲谱目录：推荐输出目录和通过环境变量配置的源谱库" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Click="OpenRecommended_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="6"><FontIcon Glyph="&#xE8B7;" /><TextBlock Text="打开目录" /></StackPanel>
+                    </Button>
+                    <Button Click="Refresh_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="6"><FontIcon Glyph="&#xE72C;" /><TextBlock Text="刷新" /></StackPanel>
+                    </Button>
+                    <Button>
+                        <StackPanel Orientation="Horizontal" Spacing="6"><FontIcon Glyph="&#xE713;" /><TextBlock Text="设置" /></StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <Border Padding="16" CornerRadius="12" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
+                <StackPanel Spacing="10">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*"/>
+                            <ColumnDefinition Width="1.2*"/>
+                            <ColumnDefinition Width="1.2*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ComboBox SelectedIndex="0"><ComboBoxItem Content="全部版本" /></ComboBox>
+                        <ComboBox Grid.Column="1" SelectedIndex="0"><ComboBoxItem Content="全部格式" /></ComboBox>
+                        <ComboBox Grid.Column="2" SelectedIndex="0"><ComboBoxItem Content="全部乐器" /></ComboBox>
+                        <Button Grid.Column="3" Width="42" Padding="0" Click="Refresh_Click"><FontIcon Glyph="&#xE72C;" /></Button>
+                    </Grid>
+                    <StackPanel x:Name="LibraryPanel" Spacing="6" />
+                </StackPanel>
+            </Border>
+
+            <Border Padding="16" CornerRadius="12" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="模型评估" FontWeight="SemiBold" />
+                    <TextBlock Text="选择人工参考 MIDI 和模型生成 MIDI，计算 Note F1、Onset、Pitch 和时长比例。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <Grid ColumnSpacing="8" RowSpacing="8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <TextBlock Text="参考 MIDI" VerticalAlignment="Center" />
+                        <TextBox x:Name="ReferenceBox" Grid.Column="1" PlaceholderText="人工谱 / Ground Truth" />
+                        <Button Grid.Column="2" Content="选择" Click="BrowseReference_Click" />
+                        <TextBlock Grid.Row="1" Text="生成 MIDI" VerticalAlignment="Center" />
+                        <TextBox x:Name="PredictionBox" Grid.Row="1" Grid.Column="1" PlaceholderText="raw / optimized / genshin" />
+                        <Button Grid.Row="1" Grid.Column="2" Content="选择" Click="BrowsePrediction_Click" />
+                        <Button x:Name="EvaluateButton" Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Content="开始评估" Style="{StaticResource AccentButtonStyle}" Click="Evaluate_Click" HorizontalAlignment="Left" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

@@ -40,6 +40,7 @@ $backendFiles = @(
     "model_evaluator.py",
     "config.json",
     "requirements-ai.txt",
+    "README.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md"
 )

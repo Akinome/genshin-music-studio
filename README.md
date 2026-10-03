@@ -1,158 +1,207 @@
-# 原神专用 MIDI 转换器
+<p align="center">
+  <img src="GenshinMusicStudio.WinUI/Assets/app_icon.png" width="144" alt="Genshin Music Studio icon">
+</p>
 
-开源许可证：GPL-3.0。第三方模型和项目说明见 `THIRD_PARTY_NOTICES.md`。
+<h1 align="center">Genshin Music Studio</h1>
 
-把 AI 扒谱出来的 MIDI 转成**原神能 100% 演奏**的 MIDI 文件，直接喂给你已有的自动演奏工具。
+<p align="center">Windows 原生 AI 扒谱、MIDI 优化与原神琴谱转换工具</p>
 
-## 它能做什么
+<p align="center">
+  <a href="https://github.com/Akinome/genshin-music-studio/releases/latest"><img src="https://img.shields.io/github/v/release/Akinome/genshin-music-studio" alt="Release"></a>
+  <img src="https://img.shields.io/badge/platform-Windows%20x64-0078D4" alt="Windows x64">
+  <img src="https://img.shields.io/badge/.NET-8.0-512BD4" alt=".NET 8">
+  <img src="https://img.shields.io/badge/WinUI-3-0F6CBD" alt="WinUI 3">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Akinome/genshin-music-studio" alt="License"></a>
+</p>
 
-| 功能 | 说明 |
+## 功能概览
+
+Genshin Music Studio 是一个 WinUI 3 桌面应用，用于：
+
+- 从 Bilibili、YouTube 等 yt-dlp 支持的网站下载音频
+- 使用多种模型进行 AI 扒谱
+- 输出 `raw / optimized / genshin` 三份 MIDI
+- 对 MIDI 做节拍量化、调性修正、碎片音合并和主旋律提取
+- 将结果折叠到原神风物之诗琴音域
+- 对比不同模型与人工谱的 Note F1、Onset 和 Pitch 指标
+
+> AI 扒谱结果取决于音频质量、混音复杂度、模型和参数。项目不承诺所有歌曲都能 100% 还原。
+
+## 界面截图
+
+| 链接一键处理 | 本地文件 |
 |---|---|
-| 去鼓组 | 自动跳过打击乐通道（channel 9） |
-| 音域约束 | 把音符八度折叠/移调到**风物之诗琴音域 C3-B5**（可改），不超出琴能弹的范围 |
-| 和弦拆分 | 同时发声的和弦自动拆成琶音（游戏内一次只能弹一个音） |
-| 保持时长 | 不改变全局速度，冲突音符自动简化，输出时长与源 MIDI 一致 |
-| 零丢音可选 | 需要保留所有音符时，可开启自动放慢；输出时长会变长 |
-| 输出标准 MIDI | 单轨 type 0，绝大多数自动演奏工具都能直接读取 |
+| ![链接一键处理](docs/images/main.png) | ![本地文件](docs/images/local.png) |
 
-## 安装
+| 环境与安装 | 谱库与模型评估 |
+|---|---|
+| ![环境与安装](docs/images/environment.png) | ![谱库](docs/images/library.png) |
 
-```powershell
-pip install mido
+## 支持的模型
+
+| 模型 | 适用场景 | 运行方式 |
+|---|---|---|
+| Basic Pitch ONNX | 通用复音、快速处理 | C# 原生 ONNX Runtime，无 Python/TensorFlow |
+| Basic Pitch Python | 通用复音对照 | `.venv-ai` |
+| Piano Transcription | 纯钢琴、钢琴翻奏 | PyTorch CPU |
+| Demucs 人声 + Basic Pitch | 带唱歌曲 | Demucs 分离后扒谱 |
+| Demucs 伴奏 + Piano | 器乐、钢琴与伴奏 | Demucs 分离后钢琴转录 |
+| Demucs 人声 + CREPE | 人声主旋律 | 分离 + 单音音高跟踪 |
+| CREPE | 独奏、哼唱、单音旋律 | PyTorch CPU |
+| librosa pyin | 轻量旋律兜底 | librosa |
+
+## 三份 MIDI 输出
+
+完整转换会生成：
+
+```text
+输出目录/
+├── raw/
+│   └── 歌名_raw.mid
+├── optimized/
+│   └── 歌名_optimized.mid
+└── genshin/
+    └── 歌名_genshin.mid
 ```
 
-## 可选源谱库路径
+- `raw`：模型原始识别结果
+- `optimized`：量化、调性、碎片音和八度修正后的结果
+- `genshin`：最终单音、琴音域、最短按键间隔约束后的结果
 
-批量分析和配对脚本不再写死个人目录，可通过环境变量指定：
+“仅 AI 扒谱”模式只输出原始 MIDI，不做原神简化。
 
-```powershell
-$env:GENSHIN_PLAYABLE_DIR = "D:\Music\成熟的原琴"
-$env:GENSHIN_BACKUP_DIR = "D:\Music\不可播备份"
+## 下载使用
+
+前往 [Releases](https://github.com/Akinome/genshin-music-studio/releases/latest) 下载：
+
+```text
+GenshinMusicStudio-win-x64.zip
 ```
 
-未设置时会回退到项目下的 `示例谱库` 目录。
+解压后：
 
-## WinUI 3 原生版
+1. 双击 `Start.bat`
+2. 或直接运行 `GenshinMusicStudio.WinUI.exe`
 
-桌面应用入口：WinUI 3 负责原生界面，Python 后端负责高级模型、下载和 MIDI 后处理。
+基础 ONNX 扒谱不需要 Python。下载功能需要系统已安装：
+
+```text
+yt-dlp
+ffmpeg
+```
+
+## 可选高级模型
+
+钢琴、Demucs、CREPE 和 Python Basic Pitch 需要独立 Python 3.11 环境。
+
+双击发布包中的：
+
+```text
+install_ai_env_uv.bat
+```
+
+或手动执行：
+
+```powershell
+uv venv --python 3.11 .venv-ai
+uv pip install --python .venv-ai\Scripts\python.exe torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+uv pip install --python .venv-ai\Scripts\python.exe -U basic-pitch yt-dlp librosa soundfile "setuptools<81"
+uv pip install --python .venv-ai\Scripts\python.exe piano_transcription_inference demucs torchcrepe
+```
+
+高级模型依赖体积较大，且当前默认使用 CPU 推理。Demucs 和 CREPE 处理长歌曲会明显慢于 Basic Pitch。
+
+## 从源码构建
+
+环境要求：
+
+- Windows 10 1809 或更高版本
+- .NET 8 SDK
+- Python 3.11 与 uv，用于高级模型
+
+构建 WinUI：
+
+```powershell
+dotnet build GenshinMusicStudio.WinUI\GenshinMusicStudio.WinUI.csproj -c Debug
+```
+
+启动：
 
 ```powershell
 dotnet run --project GenshinMusicStudio.WinUI\GenshinMusicStudio.WinUI.csproj -c Debug
 ```
 
-双击 `启动WinUI工作台.bat` 也可以启动。项目当前使用：
-
-- .NET 8
-- WinUI 3 / Windows App SDK
-- Mica 原生背景
-- NavigationView 页面导航
-- `studio_backend.py` JSON-lines 后端
-- C# `Process.Kill(entireProcessTree: true)` 停止整个后端进程树
-
-### Release 打包
-
-运行以下命令生成自包含 Windows x64 发布目录和 ZIP：
+生成自包含发布包：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File packaging\package_release.ps1
 ```
 
-输出文件：
+输出：
 
 ```text
 release\GenshinMusicStudio-win-x64\
 release\GenshinMusicStudio-win-x64.zip
 ```
 
-基础 ONNX 扒谱不依赖 Python。钢琴模型、Demucs 和 CREPE 可通过发布包中的 `install_ai_env_uv.bat` 安装。
+## 命令行工具
 
-### 原生 ONNX 扒谱
-
-音频/视频 AI 扒谱已切换为 C# 原生实现，不再依赖 Python 或 TensorFlow：
-
-- 内置 Basic Pitch `nmp.onnx` 模型，约 225 KB
-- `Microsoft.ML.OnnxRuntime` 直接推理
-- C# 调用 ffmpeg 解码为 22050 Hz 单声道 float PCM
-- C# 分窗、结果拼接、onset/note 后处理
-- C# Viterbi 主旋律提取
-- C# 直接写出 SMF Type 0 MIDI
-
-当前 WinUI 版中，视频/音频下载和 AI 扒谱走原生 ONNX；已有 MIDI 文件转换暂时保留 Python 兼容路径，便于继续复用成熟的和弦/旋律处理逻辑。
-
-界面现在支持：
-
-- 仅 AI 扒谱（不转换）
-- Basic Pitch ONNX 原生复音模式
-- Basic Pitch Python 复音模式
-- Piano Transcription 钢琴专用模式
-- librosa pyin 主旋律模式
-- 可折叠、可拖拽高度的运行日志框
-- AI 模型选择框位于“下载视频”旁边
-
-Piano Transcription 使用 `piano_transcription_inference`，模型权重约 165 MB，适合纯钢琴录音；当前通过 `.venv-ai` 的 CPU 版 PyTorch 运行。
-
-## 其他可选扒谱模型
-
-- `basic-pitch`：当前默认，适合钢琴、吉他、旋律和多重音高
-- `piano_transcription_inference`：钢琴专用，PyTorch 环境
-- `MT3` / `Omnizart`：多乐器扒谱，效果更全但安装和运行更重
-- `torchcrepe` / `CREPE` / `SPICE` / `PESTO`：单音旋律音高跟踪，适合人声或独奏
-- `Demucs` / `ByteSep`：人声和伴奏分离，通常先分离再送扒谱模型
-
-别人“直接安装就能跑”通常是因为程序自带 Python 环境、固定了 Python 版本和依赖，或者使用 ONNX/PyTorch 预编译包。工作台现在也采用这种方式，用 `uv` 隔离 Python 3.11 环境，不依赖系统 Python 3.12。
-
-## 快速使用
+基础 MIDI 转换：
 
 ```powershell
-# 1. 首次生成配置
-python midi_to_genshin.py --init
-
-# 2. 转换（输出到 输入名_genshin.mid）
-python midi_to_genshin.py 你的歌.mid
-
-# 3. 把生成的 *_genshin.mid 喂给你的自动演奏工具
+python midi_to_genshin.py 你的歌曲.mid
 ```
 
-## 常用参数
+输出：
+
+```text
+你的歌曲_genshin.mid
+```
+
+模型评估：
 
 ```powershell
-python midi_to_genshin.py 你的歌.mid -o 输出.mid      # 指定输出路径
-python midi_to_genshin.py 你的歌.mid --preview         # 只看处理摘要，不生成文件
-python midi_to_genshin.py 你的歌.mid --track 2         # 只用第 2 条音轨（AI 扒谱多轨时常用）
-python midi_to_genshin.py 你的歌.mid --tempo 1.2       # 手动放慢 1.2 倍
-python midi_to_genshin.py 你的歌.mid --chord-mode top  # 和弦只留最高音（不要琶音）
-python midi_to_genshin.py 你的歌.mid --no-auto-slow    # 关闭自动放慢
+python model_evaluator.py 人工参考.mid 模型输出.mid
 ```
 
-## config.json 说明
-
-```json
-{
-  "range": {"low": 48, "high": 83},  // 琴音域（MIDI 音号），C3-B5
-  "transpose_semitones": 0,          // 整体移调
-  "chord_mode": "arpeggio",          // 和弦处理：arpeggio 琶音 / top 只留最高音
-  "arpeggio_gap_ms": 25,             // 琶音间隔
-  "press_ms": 120,                   // 输出音符时长
-  "tempo_scale": 1.0,                // 手动放慢倍数
-  "min_gap_ms": 60,                  // 最短按键间隔
-  "chord_window_ms": 30,             // 和弦判定窗口
-  "auto_slow": true,                 // 自动放慢
-  "quantize_ms": 0                   // 时间量化（AI 扒谱抖动明显时可设 30~50）
-}
-```
-
-## 常见问题
-
-- **音域不对？** 如果游戏里用的是旧诗琴（无黑键、范围更窄），把 `config.json` 的 `range` 改小，例如 `{"low": 60, "high": 83}`（C4-B5）。
-- **和弦太多太吵？** 用 `--chord-mode top`，只留最高音旋律。
-- **AI 扒谱时间抖得厉害？** 在 config 里把 `quantize_ms` 设为 30~50，把音符对齐到网格。
-- **有多条音轨？** 先用 `--preview` 看每轨效果，再用 `--track N` 挑主旋律那一轨。
-- **转换后仍然太快？** 用 `--tempo 1.5` 或加大 config 里的 `min_gap_ms`。
-
-## 测试
-
-自带 `sample.mid` 可直接测试：
+可选环境变量：
 
 ```powershell
-python midi_to_genshin.py sample.mid --preview
+$env:GENSHIN_PLAYABLE_DIR = "D:\Music\成熟的原琴"
+$env:GENSHIN_BACKUP_DIR = "D:\Music\不可播备份"
 ```
+
+未设置时，批量分析工具会使用项目下的 `示例谱库` 目录。
+
+## 项目结构
+
+```text
+GenshinMusicStudio.WinUI/   WinUI 3 原生应用
+studio_backend.py           WinUI 与 Python 之间的 JSON 后端
+studio_pipeline.py          下载、扒谱和转换流水线
+media_tools.py              下载、分离、模型推理
+melody_extract.py           主旋律提取
+symbolic_optimizer.py       量化、调性、碎片音和八度修正
+model_evaluator.py          MIDI 指标评估
+midi_to_genshin.py          原神 MIDI 基础转换
+packaging/                  Release 打包脚本
+docs/images/                README 截图
+```
+
+## 已知限制
+
+- 当前没有 NVIDIA GPU 加速路径
+- Demucs、CREPE 和钢琴模型在 CPU 上较慢
+- 复杂混音、混响重的录音和现场版本更容易识别错误
+- MT3 和 Omnizart 暂未集成
+- yt-dlp 和 ffmpeg 需要单独安装
+
+## 许可证与致谢
+
+本项目使用 GPL-3.0 许可证。
+
+- Basic Pitch：Spotify，Apache-2.0
+- BetterGI：UI 结构与视觉风格参考，GPL-3.0
+- Demucs、torchcrepe、librosa、piano_transcription_inference 等以运行时依赖形式使用
+
+更多信息见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

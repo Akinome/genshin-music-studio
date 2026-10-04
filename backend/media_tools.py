@@ -85,7 +85,7 @@ def venv_package_path(*names):
     return None
 
 
-def install_ai_environment(callback=None, cancel_event=None, python_version="3.11"):
+def install_ai_environment(callback=None, cancel_event=None, python_version="3.11", targets=None):
     uv = tool_path("uv")
     if not uv:
         raise RuntimeError("未找到 uv，请先安装 uv：https://docs.astral.sh/uv/")
@@ -96,25 +96,47 @@ def install_ai_environment(callback=None, cancel_event=None, python_version="3.1
         python_path = ai_python_path()
     if not python_path:
         raise RuntimeError("AI 环境创建失败")
-    run_command(
-        [uv, "pip", "install", "--python", python_path, "-U", "basic-pitch", "yt-dlp", "librosa", "soundfile", "setuptools<81"],
-        callback=callback,
-        cancel_event=cancel_event,
-    )
-    if callback:
-        callback("安装 PyTorch CPU 版本（体积较大，请耐心等待）")
-    run_command(
-        [uv, "pip", "install", "--python", python_path, "torch", "torchaudio", "--index-url", "https://download.pytorch.org/whl/cpu"],
-        callback=callback,
-        cancel_event=cancel_event,
-    )
-    if callback:
-        callback("安装钢琴转录、Demucs 分离和 CREPE 模型")
-    run_command(
-        [uv, "pip", "install", "--python", python_path, "-U", "piano_transcription_inference", "demucs", "torchcrepe"],
-        callback=callback,
-        cancel_event=cancel_event,
-    )
+    groups = set(targets) if targets else {"basic", "piano", "demucs", "crepe"}
+    needs_torch = bool(groups & {"piano", "demucs", "crepe"})
+
+    if "basic" in groups:
+        run_command(
+            [uv, "pip", "install", "--python", python_path, "-U", "basic-pitch", "yt-dlp", "librosa", "soundfile", "setuptools<81"],
+            callback=callback,
+            cancel_event=cancel_event,
+        )
+    if needs_torch:
+        if callback:
+            callback("安装 PyTorch CPU 版本（体积较大，请耐心等待）")
+        run_command(
+            [uv, "pip", "install", "--python", python_path, "torch", "torchaudio", "--index-url", "https://download.pytorch.org/whl/cpu"],
+            callback=callback,
+            cancel_event=cancel_event,
+        )
+    if "piano" in groups:
+        if callback:
+            callback("安装钢琴转录模型")
+        run_command(
+            [uv, "pip", "install", "--python", python_path, "-U", "piano_transcription_inference"],
+            callback=callback,
+            cancel_event=cancel_event,
+        )
+    if "demucs" in groups:
+        if callback:
+            callback("安装 Demucs 人声/伴奏分离模型")
+        run_command(
+            [uv, "pip", "install", "--python", python_path, "-U", "demucs"],
+            callback=callback,
+            cancel_event=cancel_event,
+        )
+    if "crepe" in groups:
+        if callback:
+            callback("安装 CREPE 单音旋律模型")
+        run_command(
+            [uv, "pip", "install", "--python", python_path, "-U", "torchcrepe"],
+            callback=callback,
+            cancel_event=cancel_event,
+        )
     return python_path
 
 

@@ -39,7 +39,12 @@ public sealed partial class EnvironmentPage : Page
     {
         try
         {
-            await App.Backend.RunAsync(new BackendRequest { Action = "install_ai" });
+            var targets = new List<string>();
+            if (InstallBasicBox.IsChecked == true) targets.Add("basic");
+            if (InstallPianoBox.IsChecked == true) targets.Add("piano");
+            if (InstallDemucsBox.IsChecked == true) targets.Add("demucs");
+            if (InstallCrepeBox.IsChecked == true) targets.Add("crepe");
+            await App.Backend.RunAsync(new BackendRequest { Action = "install_ai", InstallTargets = targets });
             await RefreshDependenciesAsync();
         }
         catch (OperationCanceledException)

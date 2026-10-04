@@ -50,7 +50,10 @@ def handle(request):
         return
 
     if action == "install_ai":
-        python_path = media_tools.install_ai_environment(callback=log)
+        python_path = media_tools.install_ai_environment(
+            callback=log,
+            targets=request.get("install_targets") or None,
+        )
         emit("done", output=python_path, dependencies=media_tools.dependency_status())
         return
 

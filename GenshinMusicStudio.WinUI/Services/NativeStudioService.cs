@@ -46,7 +46,14 @@ public static class NativeStudioService
             ["ffmpeg"] = NativeAudioTools.FindTool("ffmpeg"),
             ["Basic Pitch ONNX"] = FindModelPath(),
             ["ONNX Runtime"] = "Microsoft.ML.OnnxRuntime",
-            ["AI 模式"] = "C# 原生 ONNX",
+            ["AI环境"] = FindVenvPython(),
+            ["soundfile"] = FindVenvPackage("soundfile"),
+            ["Basic Pitch (Python)"] = FindVenvPackage("basic_pitch", "basic-pitch"),
+            ["PyTorch"] = FindVenvPackage("torch"),
+            ["Piano Transcription"] = FindVenvPackage("piano_transcription_inference"),
+            ["Demucs"] = FindVenvPackage("demucs"),
+            ["CREPE"] = FindVenvPackage("torchcrepe"),
+            ["librosa pyin"] = FindVenvPackage("librosa"),
         };
         emit?.Invoke(new StudioEvent { Type = "done", Dependencies = status });
         return status;
@@ -187,5 +194,31 @@ public static class NativeStudioService
         };
         return candidates.FirstOrDefault(File.Exists)
             ?? throw new FileNotFoundException("找不到内置 Basic Pitch ONNX 模型。");
+    }
+
+    private static string? FindVenvPython()
+    {
+        var candidates = new[]
+        {
+            Path.Combine(StudioBackendClient.RepoRoot, ".venv-ai", "Scripts", "python.exe"),
+            Path.Combine(StudioBackendClient.RepoRoot, ".venv-ai", "bin", "python"),
+        };
+        return candidates.FirstOrDefault(File.Exists);
+    }
+
+    private static string? FindVenvPackage(params string[] names)
+    {
+        var sitePackages = Path.Combine(StudioBackendClient.RepoRoot, ".venv-ai", "Lib", "site-packages");
+        if (!Directory.Exists(sitePackages)) return null;
+        foreach (var name in names)
+        {
+            var packageDir = Path.Combine(sitePackages, name);
+            if (Directory.Exists(packageDir) && Directory.EnumerateFileSystemEntries(packageDir).Any()) return packageDir;
+            if (File.Exists(packageDir + ".py")) return packageDir + ".py";
+            var distInfo = Directory.EnumerateDirectories(sitePackages, name + "-*.dist-info").FirstOrDefault()
+                ?? Directory.EnumerateDirectories(sitePackages, name + ".dist-info").FirstOrDefault();
+            if (distInfo is not null) return distInfo;
+        }
+        return null;
     }
 }

@@ -15,6 +15,13 @@
                 <StackPanel Spacing="10">
                     <TextBlock Text="依赖状态" FontWeight="SemiBold" />
                     <StackPanel x:Name="DependencyPanel" Spacing="6" />
+                </StackPanel>
+            </Border>
+
+            <Border Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="模型状态" FontWeight="SemiBold" />
+                    <StackPanel x:Name="ModelPanel" Spacing="6" />
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <Button x:Name="RefreshButton" Content="重新检测" Click="Refresh_Click" />
                         <Button x:Name="InstallButton" Content="使用 uv 安装/更新 AI 环境" Style="{StaticResource AccentButtonStyle}" Click="Install_Click" />
@@ -27,7 +34,7 @@
                     <TextBlock Text="AI 环境说明" FontWeight="SemiBold" />
                     <TextBlock Text="推荐使用 uv 创建 Python 3.11 独立环境。Basic Pitch 负责复音扒谱，librosa 作为内置旋律兜底。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     <TextBox x:Name="CommandBox" AcceptsReturn="True" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" Height="90"
-                             Text="uv venv --python 3.11 .venv-ai&#x0a;uv pip install --python .venv-ai\Scripts\python.exe -U basic-pitch yt-dlp librosa soundfile &quot;setuptools&lt;81&quot;" />
+                             Text="uv venv --python 3.11 .venv-ai&#x0a;uv pip install --python .venv-ai\Scripts\python.exe -U basic-pitch yt-dlp librosa soundfile &quot;setuptools&lt;81&quot;&#x0a;uv pip install --python .venv-ai\Scripts\python.exe torch torchaudio --index-url https://download.pytorch.org/whl/cpu&#x0a;uv pip install --python .venv-ai\Scripts\python.exe piano_transcription_inference demucs torchcrepe" />
                 </StackPanel>
             </Border>
         </StackPanel>

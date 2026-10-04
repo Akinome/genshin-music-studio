@@ -41,7 +41,7 @@
             </Border>
 
             <Border Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
-                <Grid ColumnSpacing="8" HorizontalAlignment="Stretch">
+                <Grid ColumnSpacing="8" RowSpacing="6" HorizontalAlignment="Stretch">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
@@ -50,11 +50,15 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="220" />
                     </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
                     <Button x:Name="FullButton" Content="提取音频 + AI扒谱 + 转换" Style="{StaticResource AccentButtonStyle}" Click="Full_Click" />
                     <Button x:Name="TranscribeButton" Grid.Column="1" Content="仅 AI 扒谱" Click="Transcribe_Click" />
                     <Button x:Name="MidiButton" Grid.Column="2" Content="仅 MIDI 转换" Click="Midi_Click" />
                     <TextBlock Grid.Column="4" Text="AI 模型" VerticalAlignment="Center" Margin="8,0,0,0" />
-                    <ComboBox x:Name="ModelBox" Grid.Column="5" SelectedIndex="0" HorizontalAlignment="Stretch" ToolTipService.ToolTip="选择 AI 扒谱模型">
+                    <ComboBox x:Name="ModelBox" Grid.Column="5" SelectedIndex="0" HorizontalAlignment="Stretch" ToolTipService.ToolTip="选择 AI 扒谱模型" SelectionChanged="ModelBox_SelectionChanged">
                         <ComboBoxItem Content="Basic Pitch ONNX（原生复音）" Tag="basic_pitch_onnx" />
                         <ComboBoxItem Content="Basic Pitch Python（复音）" Tag="basic_pitch_python" />
                         <ComboBoxItem Content="Piano Transcription（钢琴专用）" Tag="piano_transcription" />
@@ -64,6 +68,10 @@
                         <ComboBoxItem Content="CREPE 单音旋律" Tag="crepe" />
                         <ComboBoxItem Content="librosa pyin（主旋律）" Tag="librosa_pyin" />
                     </ComboBox>
+                    <StackPanel Grid.Row="1" Grid.ColumnSpan="6" Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="模型状态" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <TextBlock x:Name="ModelStatusText" Text="检测中..." VerticalAlignment="Center" />
+                    </StackPanel>
                 </Grid>
             </Border>
         </StackPanel>

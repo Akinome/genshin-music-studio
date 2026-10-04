@@ -6,6 +6,8 @@ namespace GenshinMusicStudio_WinUI.Pages;
 
 public sealed partial class DownloadPage : Page
 {
+    private Dictionary<string, string?>? modelStatus;
+
     public DownloadPage()
     {
         InitializeComponent();
@@ -15,7 +17,11 @@ public sealed partial class DownloadPage : Page
         Unloaded += DownloadPage_Unloaded;
     }
 
-    private void DownloadPage_Loaded(object sender, RoutedEventArgs e) => App.Backend.RunningChanged += SetRunning;
+    private async void DownloadPage_Loaded(object sender, RoutedEventArgs e)
+    {
+        App.Backend.RunningChanged += SetRunning;
+        await RefreshModelStatusAsync();
+    }
     private void DownloadPage_Unloaded(object sender, RoutedEventArgs e) => App.Backend.RunningChanged -= SetRunning;
 
     private void SetRunning(bool running)
@@ -55,6 +61,34 @@ public sealed partial class DownloadPage : Page
     private async void TranscribeOnly_Click(object sender, RoutedEventArgs e) => await RunAsync("transcribe_url");
     private async void FullPipeline_Click(object sender, RoutedEventArgs e) => await RunAsync("full_pipeline");
 
+    private async void ModelBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateModelStatusHint();
+
+    private async Task RefreshModelStatusAsync()
+    {
+        if (App.Backend.IsRunning) return;
+        try
+        {
+            modelStatus = await App.Backend.RunAsync(new BackendRequest { Action = "status" });
+        }
+        catch (Exception)
+        {
+            modelStatus = null;
+        }
+        UpdateModelStatusHint();
+    }
+
+    private void UpdateModelStatusHint()
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            var model = (ModelBox.SelectedItem as ComboBoxItem)?.Tag?.ToString();
+            var (installed, text) = ModelInstallStatus.Evaluate(model, modelStatus);
+            ModelStatusText.Text = text;
+            ModelStatusText.Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources[
+                installed ? "SystemFillColorSuccessBrush" : "SystemFillColorCriticalBrush"];
+        });
+    }
+
     private async Task RunAsync(string action)
     {
         var urls = UrlBox.Text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
@@ -83,6 +117,7 @@ public sealed partial class DownloadPage : Page
         try
         {
             await App.Backend.RunAsync(request);
+            await RefreshModelStatusAsync();
         }
         catch (OperationCanceledException)
         {

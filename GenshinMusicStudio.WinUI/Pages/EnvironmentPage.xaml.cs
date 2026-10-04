@@ -7,6 +7,8 @@ namespace GenshinMusicStudio_WinUI.Pages;
 
 public sealed partial class EnvironmentPage : Page
 {
+    private static readonly string[] ToolKeys = { "yt-dlp", "ffmpeg", "uv", "AI环境", "soundfile" };
+
     public EnvironmentPage()
     {
         InitializeComponent();
@@ -66,27 +68,37 @@ public sealed partial class EnvironmentPage : Page
     private void RenderDependencies(Dictionary<string, string?>? values)
     {
         DependencyPanel.Children.Clear();
+        ModelPanel.Children.Clear();
         if (values is null) return;
-        foreach (var pair in values)
+        foreach (var pair in values.Where(p => ToolKeys.Contains(p.Key)))
         {
-            var row = new Grid { ColumnSpacing = 12 };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.Children.Add(new TextBlock { Text = pair.Key, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-            var installed = !string.IsNullOrWhiteSpace(pair.Value);
-            var state = new TextBlock
-            {
-                Text = installed ? "已安装" : "未安装",
-                Foreground = (Brush)Application.Current.Resources[installed ? "SystemFillColorSuccessBrush" : "SystemFillColorCriticalBrush"],
-            };
-            Grid.SetColumn(state, 1);
-            row.Children.Add(state);
-            var path = new TextBlock { Text = pair.Value ?? "未找到", TextTrimming = TextTrimming.CharacterEllipsis, Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"] };
-            Grid.SetColumn(path, 2);
-            row.Children.Add(path);
-            DependencyPanel.Children.Add(row);
+            DependencyPanel.Children.Add(CreateStatusRow(pair.Key, pair.Value));
         }
+        foreach (var pair in values.Where(p => !ToolKeys.Contains(p.Key)))
+        {
+            ModelPanel.Children.Add(CreateStatusRow(pair.Key, pair.Value));
+        }
+    }
+
+    private static Grid CreateStatusRow(string key, string? value)
+    {
+        var row = new Grid { ColumnSpacing = 12 };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.Children.Add(new TextBlock { Text = key, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
+        var installed = !string.IsNullOrWhiteSpace(value);
+        var state = new TextBlock
+        {
+            Text = installed ? "已安装" : "未安装",
+            Foreground = (Brush)Application.Current.Resources[installed ? "SystemFillColorSuccessBrush" : "SystemFillColorCriticalBrush"],
+        };
+        Grid.SetColumn(state, 1);
+        row.Children.Add(state);
+        var path = new TextBlock { Text = value ?? "未找到", TextTrimming = TextTrimming.CharacterEllipsis, Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"] };
+        Grid.SetColumn(path, 2);
+        row.Children.Add(path);
+        return row;
     }
 
     private async Task ShowMessageAsync(string title, string message)

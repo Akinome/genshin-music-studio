@@ -46,6 +46,45 @@ def basic_pitch_path():
     return shutil.which("basic-pitch")
 
 
+def native_onnx_model_path():
+    candidates = [
+        os.path.join(BASE_DIR, "GenshinMusicStudio.WinUI", "Assets", "Models", "nmp.onnx"),
+        os.path.join(BASE_DIR, "Assets", "Models", "nmp.onnx"),
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def venv_site_packages():
+    venv = os.path.join(BASE_DIR, ".venv-ai")
+    for sub in ("Lib", "lib"):
+        site = os.path.join(venv, sub, "site-packages")
+        if os.path.isdir(site):
+            return site
+    matches = sorted(glob.glob(os.path.join(venv, "lib", "python*", "site-packages")))
+    return matches[0] if matches else None
+
+
+def venv_package_path(*names):
+    site = venv_site_packages()
+    if not site:
+        return None
+    for name in names:
+        pkg = os.path.join(site, name)
+        if os.path.isdir(pkg) and os.listdir(pkg):
+            return pkg
+        if os.path.isfile(pkg + ".py"):
+            return pkg + ".py"
+    for name in names:
+        for pattern in (name + "-*.dist-info", name + ".dist-info"):
+            matches = sorted(glob.glob(os.path.join(site, pattern)))
+            if matches:
+                return matches[-1]
+    return None
+
+
 def install_ai_environment(callback=None, cancel_event=None, python_version="3.11"):
     uv = tool_path("uv")
     if not uv:
@@ -62,6 +101,20 @@ def install_ai_environment(callback=None, cancel_event=None, python_version="3.1
         callback=callback,
         cancel_event=cancel_event,
     )
+    if callback:
+        callback("安装 PyTorch CPU 版本（体积较大，请耐心等待）")
+    run_command(
+        [uv, "pip", "install", "--python", python_path, "torch", "torchaudio", "--index-url", "https://download.pytorch.org/whl/cpu"],
+        callback=callback,
+        cancel_event=cancel_event,
+    )
+    if callback:
+        callback("安装钢琴转录、Demucs 分离和 CREPE 模型")
+    run_command(
+        [uv, "pip", "install", "--python", python_path, "-U", "piano_transcription_inference", "demucs", "torchcrepe"],
+        callback=callback,
+        cancel_event=cancel_event,
+    )
     return python_path
 
 
@@ -69,15 +122,21 @@ def dependency_status():
     def module_path(name):
         spec = importlib.util.find_spec(name)
         return spec.origin if spec else None
-    return {
+    status = {
         "yt-dlp": tool_path("yt-dlp"),
         "ffmpeg": tool_path("ffmpeg"),
         "uv": tool_path("uv"),
-        "basic-pitch": basic_pitch_path(),
         "AI环境": ai_python_path(),
-        "librosa": module_path("librosa"),
         "soundfile": module_path("soundfile"),
+        "Basic Pitch ONNX": native_onnx_model_path(),
+        "Basic Pitch (Python)": venv_package_path("basic_pitch", "basic-pitch"),
+        "PyTorch": venv_package_path("torch"),
+        "Piano Transcription": venv_package_path("piano_transcription_inference"),
+        "Demucs": venv_package_path("demucs"),
+        "CREPE": venv_package_path("torchcrepe"),
+        "librosa pyin": module_path("librosa") or venv_package_path("librosa"),
     }
+    return status
 
 
 def terminate_process(proc):

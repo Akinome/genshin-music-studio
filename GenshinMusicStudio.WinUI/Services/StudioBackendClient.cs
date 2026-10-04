@@ -67,7 +67,7 @@ public sealed class StudioBackendClient
             var current = AppContext.BaseDirectory;
             while (!string.IsNullOrEmpty(current))
             {
-                if (File.Exists(Path.Combine(current, "studio_backend.py")))
+                if (File.Exists(Path.Combine(current, "backend", "studio_backend.py")))
                 {
                     return current;
                 }
@@ -112,7 +112,7 @@ public sealed class StudioBackendClient
         }
 
         cancelled = false;
-        var script = Path.Combine(RepoRoot, "studio_backend.py");
+        var script = Path.Combine(RepoRoot, "backend", "studio_backend.py");
         if (!File.Exists(script))
         {
             throw new FileNotFoundException("找不到 Python 后端脚本", script);

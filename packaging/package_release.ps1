@@ -27,25 +27,28 @@ Get-ChildItem -LiteralPath $appDir -Recurse -Filter "*.pdb" -File | Remove-Item 
 
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "launcher.bat") -Destination (Join-Path $appDir "Start.bat") -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "README-RELEASE.txt") -Destination (Join-Path $appDir "README.txt") -Force
-Copy-Item -LiteralPath (Join-Path $root "install_ai_env_uv.bat") -Destination $appDir -Force
+Copy-Item -LiteralPath (Join-Path $root "scripts\install_ai_env_uv.bat") -Destination $appDir -Force
 $backendFiles = @(
-    "studio_backend.py",
-    "studio_pipeline.py",
-    "media_tools.py",
-    "midi_to_genshin.py",
-    "duration_preserving.py",
-    "melody_extract.py",
-    "symbolic_optimizer.py",
-    "conversion_modes.py",
-    "model_evaluator.py",
+    "backend\studio_backend.py",
+    "backend\studio_pipeline.py",
+    "backend\media_tools.py",
+    "backend\midi_to_genshin.py",
+    "backend\duration_preserving.py",
+    "backend\melody_extract.py",
+    "backend\symbolic_optimizer.py",
+    "backend\conversion_modes.py",
+    "backend\model_evaluator.py",
     "config.json",
-    "requirements-ai.txt",
+    "backend\requirements-ai.txt",
     "README.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md"
 )
 foreach ($file in $backendFiles) {
-    Copy-Item -LiteralPath (Join-Path $root $file) -Destination $appDir -Force
+    $source = Join-Path $root $file
+    $destination = Join-Path $appDir $file
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
+    Copy-Item -LiteralPath $source -Destination $destination -Force
 }
 
 if (Test-Path -LiteralPath $zipPath) {

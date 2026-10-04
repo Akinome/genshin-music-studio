@@ -11,6 +11,11 @@ import re
 import sys
 from contextlib import redirect_stdout
 
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BACKEND_DIR = os.path.join(REPO_ROOT, "backend")
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+
 import midi_to_genshin as mtg
 
 try:
@@ -19,7 +24,7 @@ try:
 except Exception:
     pass
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = REPO_ROOT
 PLAYABLE_DIR = os.environ.get("GENSHIN_PLAYABLE_DIR", os.path.join(BASE_DIR, "示例谱库", "成熟的原琴"))
 BACKUP_DIR = os.environ.get("GENSHIN_BACKUP_DIR", os.path.join(BASE_DIR, "示例谱库", "不可播备份"))
 OUT_DIR = os.path.join(BASE_DIR, "converted_backup")
@@ -120,7 +125,7 @@ def build_pairs():
 
 def validate_outputs(out_dir=None, cfg=None):
     out_dir = out_dir or OUT_DIR
-    cfg = cfg or mtg.load_config(os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json"))
+    cfg = cfg or mtg.load_config(os.path.join(BASE_DIR, "config.json"))
     low = cfg["range"]["low"]
     high = cfg["range"]["high"]
     min_gap_ms = cfg["min_gap_ms"]
@@ -190,7 +195,7 @@ def main():
         validate_outputs()
         return
     convert = "--preview" not in sys.argv
-    cfg = mtg.load_config(os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json"))
+    cfg = mtg.load_config(os.path.join(BASE_DIR, "config.json"))
     os.makedirs(OUT_DIR, exist_ok=True)
 
     rows = []

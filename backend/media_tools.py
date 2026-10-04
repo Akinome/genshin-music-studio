@@ -17,7 +17,7 @@ from contextlib import redirect_stderr, redirect_stdout
 import mido
 
 CREATE_NO_WINDOW = 0x08000000 if os.name == "nt" else 0
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def tool_path(name):
@@ -515,4 +515,3 @@ def transcribe_audio(audio_path, out_dir, onset_threshold=0.5, frame_threshold=0
             return fallback
         raise RuntimeError("扒谱完成但没有找到 MIDI 文件")
     return files[-1]
-

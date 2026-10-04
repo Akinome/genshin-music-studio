@@ -9,6 +9,8 @@ import media_tools
 import studio_pipeline
 import model_evaluator
 
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 try:
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
@@ -54,7 +56,7 @@ def handle(request):
 
     if action in ("download_audio", "download_video"):
         mode = "audio" if action == "download_audio" else "video"
-        work = request.get("work_dir") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "工作区")
+        work = request.get("work_dir") or os.path.join(REPO_ROOT, "工作区")
         files = []
         urls = request.get("urls") or []
         for index, url in enumerate(urls, 1):
@@ -73,8 +75,8 @@ def handle(request):
         return
 
     if action == "full_pipeline":
-        work = request.get("work_dir") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "工作区")
-        out_dir = request.get("out_dir") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "AI扒谱输出")
+        work = request.get("work_dir") or os.path.join(REPO_ROOT, "工作区")
+        out_dir = request.get("out_dir") or os.path.join(REPO_ROOT, "AI扒谱输出")
         cfg = build_config(request)
         model = request.get("model", "basic_pitch_onnx")
         results = []
@@ -98,8 +100,8 @@ def handle(request):
         return
 
     if action == "transcribe_url":
-        work = request.get("work_dir") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "工作区")
-        out_dir = request.get("out_dir") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "AI扒谱输出")
+        work = request.get("work_dir") or os.path.join(REPO_ROOT, "工作区")
+        out_dir = request.get("out_dir") or os.path.join(REPO_ROOT, "AI扒谱输出")
         cfg = build_config(request)
         model = request.get("model", "basic_pitch_onnx")
         results = []
@@ -125,7 +127,7 @@ def handle(request):
 
     if action == "local_full":
         path = request.get("path", "")
-        out_dir = request.get("out_dir") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "本地处理输出")
+        out_dir = request.get("out_dir") or os.path.join(REPO_ROOT, "本地处理输出")
         cfg = build_config(request)
         model = request.get("model", "basic_pitch_onnx")
         if path.lower().endswith((".mid", ".midi")):
@@ -146,7 +148,7 @@ def handle(request):
 
     if action == "transcribe":
         path = request.get("path", "")
-        out_dir = request.get("out_dir") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "本地处理输出", "扒谱MIDI")
+        out_dir = request.get("out_dir") or os.path.join(REPO_ROOT, "本地处理输出", "扒谱MIDI")
         if path.lower().endswith((".mid", ".midi")):
             midi = path
         else:
@@ -165,7 +167,7 @@ def handle(request):
 
     if action == "convert_midi":
         path = request.get("path", "")
-        out_dir = request.get("out_dir") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "本地处理输出")
+        out_dir = request.get("out_dir") or os.path.join(REPO_ROOT, "本地处理输出")
         result = studio_pipeline.process_midi_file(path, out_dir, build_config(request))
         emit("done", output=out_dir, result=result)
         return

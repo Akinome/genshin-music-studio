@@ -7,6 +7,13 @@ import json
 import os
 import sys
 
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TOOLS_DIR = os.path.dirname(os.path.abspath(__file__))
+BACKEND_DIR = os.path.join(REPO_ROOT, "backend")
+for extra_dir in (TOOLS_DIR, BACKEND_DIR):
+    if extra_dir not in sys.path:
+        sys.path.insert(0, extra_dir)
+
 import melody_extract as me
 import midi_to_genshin as mtg
 from process_library import BACKUP_DIR, PLAYABLE_DIR, validate_outputs
@@ -17,7 +24,7 @@ try:
 except Exception:
     pass
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = REPO_ROOT
 STAGE_DIR = os.path.join(BASE_DIR, "优化完成_纯旋律")
 SOURCES = [
     ("成熟原琴", PLAYABLE_DIR),

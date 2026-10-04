@@ -149,7 +149,7 @@ release\GenshinMusicStudio-win-x64.zip
 基础 MIDI 转换：
 
 ```powershell
-python midi_to_genshin.py 你的歌曲.mid
+python backend\midi_to_genshin.py 你的歌曲.mid
 ```
 
 输出：
@@ -161,7 +161,7 @@ python midi_to_genshin.py 你的歌曲.mid
 模型评估：
 
 ```powershell
-python model_evaluator.py 人工参考.mid 模型输出.mid
+python backend\model_evaluator.py 人工参考.mid 模型输出.mid
 ```
 
 可选环境变量：
@@ -177,13 +177,10 @@ $env:GENSHIN_BACKUP_DIR = "D:\Music\不可播备份"
 
 ```text
 GenshinMusicStudio.WinUI/   WinUI 3 原生应用
-studio_backend.py           WinUI 与 Python 之间的 JSON 后端
-studio_pipeline.py          下载、扒谱和转换流水线
-media_tools.py              下载、分离、模型推理
-melody_extract.py           主旋律提取
-symbolic_optimizer.py       量化、调性、碎片音和八度修正
-model_evaluator.py          MIDI 指标评估
-midi_to_genshin.py          原神 MIDI 基础转换
+backend/                    Python 后端、模型调用与转换流水线
+tools/                      批量处理、诊断和图标生成工具
+scripts/                    启动和 AI 环境安装脚本
+samples/                    示例 MIDI
 packaging/                  Release 打包脚本
 docs/images/                README 截图
 ```

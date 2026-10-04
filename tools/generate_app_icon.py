@@ -5,7 +5,7 @@ import os
 
 from PIL import Image, ImageDraw, ImageFont
 
-BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "GenshinMusicStudio.WinUI", "Assets")
+BASE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "GenshinMusicStudio.WinUI", "Assets")
 SOURCE_LOGO = os.path.join(BASE, "app_icon_source.png")
 
 

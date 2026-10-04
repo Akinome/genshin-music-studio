@@ -17,7 +17,7 @@ Genshin Music Studio - Windows x64
 
 高级模型：
 双击“install_ai_env_uv.bat”，通过 uv 安装 Python 3.11 环境。
-该步骤会下载 PyTorch、Basic Pitch、Piano Transcription、Demucs 和 CREPE，体积较大。
+该步骤会下载 PyTorch、Piano Transcription、Demucs 和 CREPE，体积较大。
 
 高级模型包括：
 - Piano Transcription 钢琴专用模型

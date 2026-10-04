@@ -23,7 +23,7 @@
                     <TextBlock Text="模型状态" FontWeight="SemiBold" />
                     <StackPanel x:Name="ModelPanel" Spacing="6" />
                     <TextBlock Text="选择要安装的模型组" FontWeight="SemiBold" />
-                    <CheckBox x:Name="InstallBasicBox" Content="基础组（Basic Pitch Python、yt-dlp、librosa）" IsChecked="True" />
+                    <CheckBox x:Name="InstallBasicBox" Content="基础组（yt-dlp、librosa、soundfile）" IsChecked="True" />
                     <CheckBox x:Name="InstallPianoBox" Content="钢琴组（Piano Transcription，含 PyTorch）" IsChecked="True" />
                     <CheckBox x:Name="InstallDemucsBox" Content="Demucs 组（人声/伴奏分离，含 PyTorch）" IsChecked="True" />
                     <CheckBox x:Name="InstallCrepeBox" Content="CREPE 组（单音旋律，含 PyTorch）" IsChecked="True" />
@@ -37,9 +37,9 @@
             <Border Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
                 <StackPanel Spacing="10">
                     <TextBlock Text="AI 环境说明" FontWeight="SemiBold" />
-                    <TextBlock Text="推荐使用 uv 创建 Python 3.11 独立环境。Basic Pitch 负责复音扒谱，librosa 作为内置旋律兜底。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock Text="推荐使用 uv 创建 Python 3.11 独立环境。基础复音扒谱使用内置 ONNX 模型，librosa 作为内置旋律兜底。" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     <TextBox x:Name="CommandBox" AcceptsReturn="True" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" Height="90"
-                             Text="uv venv --python 3.11 .venv-ai&#x0a;uv pip install --python .venv-ai\Scripts\python.exe -U basic-pitch yt-dlp librosa soundfile &quot;setuptools&lt;81&quot;&#x0a;uv pip install --python .venv-ai\Scripts\python.exe torch torchaudio --index-url https://download.pytorch.org/whl/cpu&#x0a;uv pip install --python .venv-ai\Scripts\python.exe piano_transcription_inference demucs torchcrepe" />
+                             Text="uv venv --python 3.11 .venv-ai&#x0a;uv pip install --python .venv-ai\Scripts\python.exe -U yt-dlp librosa soundfile &quot;setuptools&lt;81&quot;&#x0a;uv pip install --python .venv-ai\Scripts\python.exe torch torchaudio --index-url https://download.pytorch.org/whl/cpu&#x0a;uv pip install --python .venv-ai\Scripts\python.exe piano_transcription_inference demucs torchcrepe" />
                 </StackPanel>
             </Border>
         </StackPanel>

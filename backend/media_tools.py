@@ -101,7 +101,7 @@ def install_ai_environment(callback=None, cancel_event=None, python_version="3.1
 
     if "basic" in groups:
         run_command(
-            [uv, "pip", "install", "--python", python_path, "-U", "basic-pitch", "yt-dlp", "librosa", "soundfile", "setuptools<81"],
+            [uv, "pip", "install", "--python", python_path, "-U", "yt-dlp", "librosa", "soundfile", "setuptools<81"],
             callback=callback,
             cancel_event=cancel_event,
         )
@@ -151,7 +151,6 @@ def dependency_status():
         "AI环境": ai_python_path(),
         "soundfile": module_path("soundfile"),
         "Basic Pitch ONNX": native_onnx_model_path(),
-        "Basic Pitch (Python)": venv_package_path("basic_pitch", "basic-pitch"),
         "PyTorch": venv_package_path("torch"),
         "Piano Transcription": venv_package_path("piano_transcription_inference"),
         "Demucs": venv_package_path("demucs"),

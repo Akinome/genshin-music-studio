@@ -4,9 +4,7 @@ public static class ModelInstallStatus
 {
     public static string[] RequiredKeys(string? modelTag) => modelTag switch
     {
-        "basic_pitch_python" => new[] { "Basic Pitch (Python)" },
         "piano_transcription" => new[] { "PyTorch", "Piano Transcription" },
-        "demucs_vocals_basic" => new[] { "PyTorch", "Demucs", "Basic Pitch (Python)" },
         "demucs_accompaniment_piano" => new[] { "PyTorch", "Demucs", "Piano Transcription" },
         "demucs_vocals_crepe" => new[] { "PyTorch", "Demucs", "CREPE" },
         "crepe" => new[] { "PyTorch", "CREPE" },

@@ -42,9 +42,7 @@ Genshin Music Studio 是一个 WinUI 3 桌面应用，用于：
 | 模型 | 适用场景 | 运行方式 |
 |---|---|---|
 | Basic Pitch ONNX | 通用复音、快速处理 | C# 原生 ONNX Runtime，无 Python/TensorFlow |
-| Basic Pitch Python | 通用复音对照 | `.venv-ai` |
 | Piano Transcription | 纯钢琴、钢琴翻奏 | PyTorch CPU |
-| Demucs 人声 + Basic Pitch | 带唱歌曲 | Demucs 分离后扒谱 |
 | Demucs 伴奏 + Piano | 器乐、钢琴与伴奏 | Demucs 分离后钢琴转录 |
 | Demucs 人声 + CREPE | 人声主旋律 | 分离 + 单音音高跟踪 |
 | CREPE | 独奏、哼唱、单音旋律 | PyTorch CPU |
@@ -92,7 +90,7 @@ ffmpeg
 
 ## 可选高级模型
 
-钢琴、Demucs、CREPE 和 Python Basic Pitch 需要独立 Python 3.11 环境。
+钢琴、Demucs 和 CREPE 需要独立 Python 3.11 环境。
 
 双击发布包中的：
 
@@ -105,7 +103,7 @@ install_ai_env_uv.bat
 ```powershell
 uv venv --python 3.11 .venv-ai
 uv pip install --python .venv-ai\Scripts\python.exe torch torchaudio --index-url https://download.pytorch.org/whl/cpu
-uv pip install --python .venv-ai\Scripts\python.exe -U basic-pitch yt-dlp librosa soundfile "setuptools<81"
+uv pip install --python .venv-ai\Scripts\python.exe -U yt-dlp librosa soundfile "setuptools<81"
 uv pip install --python .venv-ai\Scripts\python.exe piano_transcription_inference demucs torchcrepe
 ```
 

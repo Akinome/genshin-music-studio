@@ -63,18 +63,13 @@ def publish_triple_output(raw_midi, out_dir, cfg, callback=None):
 
 def transcribe_with_model(audio_path, work_dir, model="basic_pitch_onnx", callback=None, cancel_event=None, midi_dir=None):
     midi_dir = midi_dir or os.path.join(work_dir, "transcription")
-    if model in ("demucs_vocals_basic", "demucs_accompaniment_piano", "demucs_vocals_crepe"):
+    if model in ("demucs_accompaniment_piano", "demucs_vocals_crepe"):
         stems = media_tools.separate_audio(audio_path, os.path.join(work_dir, "stems"), callback=callback, cancel_event=cancel_event)
         if model == "demucs_vocals_crepe":
             selected = stems.get("vocals") or stems.get("accompaniment")
             if not selected:
                 raise RuntimeError("Demucs 没有生成可用的 vocal stem")
             return media_tools.transcribe_melody_crepe(selected, midi_dir, callback=callback, cancel_event=cancel_event)
-        if model == "demucs_vocals_basic":
-            selected = stems.get("vocals") or stems.get("accompaniment")
-            if not selected:
-                raise RuntimeError("Demucs 没有生成可用的 vocal stem")
-            return media_tools.transcribe_audio(selected, midi_dir, callback=callback, cancel_event=cancel_event)
         selected = stems.get("accompaniment") or stems.get("vocals")
         if not selected:
             raise RuntimeError("Demucs 没有生成可用的 accompaniment stem")

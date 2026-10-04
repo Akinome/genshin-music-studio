@@ -48,7 +48,6 @@ public static class NativeStudioService
             ["ONNX Runtime"] = "Microsoft.ML.OnnxRuntime",
             ["AI环境"] = FindVenvPython(),
             ["soundfile"] = FindVenvPackage("soundfile"),
-            ["Basic Pitch (Python)"] = FindVenvPackage("basic_pitch", "basic-pitch"),
             ["PyTorch"] = FindVenvPackage("torch"),
             ["Piano Transcription"] = FindVenvPackage("piano_transcription_inference"),
             ["Demucs"] = FindVenvPackage("demucs"),

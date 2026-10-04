@@ -94,9 +94,7 @@
                     <TextBlock Grid.Column="5" Text="AI 模型" VerticalAlignment="Center" Margin="8,0,0,0" />
                     <ComboBox x:Name="ModelBox" Grid.Column="6" SelectedIndex="0" HorizontalAlignment="Stretch" ToolTipService.ToolTip="选择 AI 扒谱模型" SelectionChanged="ModelBox_SelectionChanged">
                         <ComboBoxItem Content="Basic Pitch ONNX（原生复音）" Tag="basic_pitch_onnx" />
-                        <ComboBoxItem Content="Basic Pitch Python（复音）" Tag="basic_pitch_python" />
                         <ComboBoxItem Content="Piano Transcription（钢琴专用）" Tag="piano_transcription" />
-                        <ComboBoxItem Content="Demucs 人声 + Basic Pitch" Tag="demucs_vocals_basic" />
                         <ComboBoxItem Content="Demucs 伴奏 + Piano" Tag="demucs_accompaniment_piano" />
                         <ComboBoxItem Content="Demucs 人声 + CREPE" Tag="demucs_vocals_crepe" />
                         <ComboBoxItem Content="CREPE 单音旋律" Tag="crepe" />

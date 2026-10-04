@@ -11,6 +11,15 @@ if (-not $resolvedRelease.StartsWith($resolvedRoot, [StringComparison]::OrdinalI
     throw "Release path is outside the repository: $resolvedRelease"
 }
 
+# Preserve an AI environment installed inside the packaged app across repackaging.
+$venvInApp = Join-Path $appDir ".venv-ai"
+$venvStash = Join-Path $releaseRoot ".venv-ai-stash"
+if (Test-Path -LiteralPath $venvInApp) {
+    if (Test-Path -LiteralPath $venvStash) {
+        Remove-Item -LiteralPath $venvStash -Recurse -Force
+    }
+    Move-Item -LiteralPath $venvInApp -Destination $venvStash
+}
 if (Test-Path -LiteralPath $appDir) {
     Remove-Item -LiteralPath $appDir -Recurse -Force
 }
@@ -55,6 +64,10 @@ if (Test-Path -LiteralPath $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force
 }
 Compress-Archive -Path (Join-Path $appDir "*") -DestinationPath $zipPath -CompressionLevel Optimal
+
+if (Test-Path -LiteralPath $venvStash) {
+    Move-Item -LiteralPath $venvStash -Destination (Join-Path $appDir ".venv-ai")
+}
 
 Write-Host "Release directory: $appDir"
 Write-Host "Release archive:   $zipPath"

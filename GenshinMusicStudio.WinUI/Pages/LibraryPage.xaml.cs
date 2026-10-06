@@ -194,8 +194,13 @@ public sealed partial class LibraryPage : Page
         var folders = settings.LibraryFolders;
         if (folders is null || folders.Count == 0)
         {
-            folders = AppSettings.DefaultLibraryFolders(settings, StudioBackendClient.RepoRoot);
-            settings.LibraryFolders = folders;
+            LibraryPanel.Children.Add(new TextBlock
+            {
+                Text = "列表为空，点击“添加目录”添加谱库目录。",
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                Margin = new Thickness(4, 8, 4, 8),
+            });
+            return;
         }
 
         foreach (var folder in folders.ToList())

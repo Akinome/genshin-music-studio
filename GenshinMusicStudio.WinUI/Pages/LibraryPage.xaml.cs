@@ -10,11 +10,167 @@ public sealed partial class LibraryPage : Page
     public LibraryPage()
     {
         InitializeComponent();
-        Loaded += (_, _) => RenderLibrary();
+        Loaded += LibraryPage_Loaded;
     }
 
+    private async void LibraryPage_Loaded(object sender, RoutedEventArgs e)
+    {
+        LoadSettingsIntoBoxes();
+        RenderLibrary();
+    }
+
+    private void LoadSettingsIntoBoxes()
+    {
+        var settings = AppSettings.Load();
+        var root = StudioBackendClient.RepoRoot;
+        PlayableBox.Text = settings.PlayableDir
+            ?? Environment.GetEnvironmentVariable("GENSHIN_PLAYABLE_DIR")
+            ?? Path.Combine(root, "示例谱库", "成熟的原琴");
+        BackupBox.Text = settings.BackupDir
+            ?? Environment.GetEnvironmentVariable("GENSHIN_BACKUP_DIR")
+            ?? Path.Combine(root, "示例谱库", "不可播备份");
+        OutputDirBox.Text = settings.OutputDir ?? Path.Combine(root, "优化完成_原神可用");
+    }
+
+    private void SaveSettings_Click(object sender, RoutedEventArgs e)
+    {
+        AppSettings.Save(new AppSettingsData
+        {
+            PlayableDir = PlayableBox.Text.Trim(),
+            BackupDir = BackupBox.Text.Trim(),
+            OutputDir = OutputDirBox.Text.Trim(),
+        });
+        RenderLibrary();
+    }
+
+    private async void BrowsePlayable_Click(object sender, RoutedEventArgs e)
+    {
+        var path = await PickerHelper.PickFolderAsync();
+        if (path is not null) PlayableBox.Text = path;
+    }
+
+    private async void BrowseBackup_Click(object sender, RoutedEventArgs e)
+    {
+        var path = await PickerHelper.PickFolderAsync();
+        if (path is not null) BackupBox.Text = path;
+    }
+
+    private async void BrowseOutputDir_Click(object sender, RoutedEventArgs e)
+    {
+        var path = await PickerHelper.PickFolderAsync();
+        if (path is not null) OutputDirBox.Text = path;
+    }
+
+    private void OpenPlayable_Click(object sender, RoutedEventArgs e) => OpenFolder(PlayableBox.Text);
+    private void OpenBackup_Click(object sender, RoutedEventArgs e) => OpenFolder(BackupBox.Text);
+    private void OpenOutputDir_Click(object sender, RoutedEventArgs e) => OpenFolder(OutputDirBox.Text);
+
+    private async void BrowseMigrateFrom_Click(object sender, RoutedEventArgs e)
+    {
+        var path = await PickerHelper.PickFolderAsync();
+        if (path is not null) MigrateFromBox.Text = path;
+    }
+
+    private async void BrowseMigrateTo_Click(object sender, RoutedEventArgs e)
+    {
+        var path = await PickerHelper.PickFolderAsync();
+        if (path is not null) MigrateToBox.Text = path;
+    }
+
+    private async void Migrate_Click(object sender, RoutedEventArgs e)
+    {
+        var from = MigrateFromBox.Text.Trim();
+        var to = MigrateToBox.Text.Trim();
+        var move = (MigrateModeBox.SelectedItem as ComboBoxItem)?.Content?.ToString() == "移动";
+        if (string.IsNullOrWhiteSpace(from) || !Directory.Exists(from))
+        {
+            await ShowMessageAsync("缺少源目录", "请选择有效的源目录。");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(to))
+        {
+            await ShowMessageAsync("缺少目标目录", "请选择目标目录。");
+            return;
+        }
+        if (string.Equals(Path.GetFullPath(from), Path.GetFullPath(to), StringComparison.OrdinalIgnoreCase))
+        {
+            await ShowMessageAsync("路径相同", "源目录和目标目录不能相同。");
+            return;
+        }
+
+        var files = Directory.EnumerateFiles(from, "*.*", SearchOption.AllDirectories)
+            .Where(f => f.EndsWith(".mid", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".midi", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (files.Count == 0)
+        {
+            await ShowMessageAsync("没有找到 MIDI", "源目录中没有 MIDI 文件。");
+            return;
+        }
+
+        var confirm = await new ContentDialog
+        {
+            Title = "确认迁移",
+            Content = string.Format("将在目标目录中{0} {1} 个 MIDI 文件，同名文件跳过。是否继续？", move ? "移动" : "复制", files.Count),
+            PrimaryButtonText = "开始",
+            CloseButtonText = "取消",
+            XamlRoot = XamlRoot,
+        }.ShowAsync();
+        if (confirm != ContentDialogResult.Primary) return;
+
+        MigrateButton.IsEnabled = false;
+        var copied = 0;
+        var skipped = 0;
+        var failed = 0;
+        try
+        {
+            Directory.CreateDirectory(to);
+            foreach (var file in files)
+            {
+                var target = Path.Combine(to, Path.GetFileName(file));
+                try
+                {
+                    if (File.Exists(target))
+                    {
+                        skipped++;
+                        continue;
+                    }
+                    if (move) File.Move(file, target);
+                    else File.Copy(file, target);
+                    copied++;
+                }
+                catch
+                {
+                    failed++;
+                }
+            }
+        }
+        finally
+        {
+            MigrateButton.IsEnabled = true;
+        }
+
+        await ShowMessageAsync("迁移完成", string.Format("{0} {1} 个，跳过 {2} 个，失败 {3} 个。", move ? "移动" : "复制", copied, skipped, failed));
+        RenderLibrary();
+    }
+
+
     private void Refresh_Click(object sender, RoutedEventArgs e) => RenderLibrary();
-    private void OpenRecommended_Click(object sender, RoutedEventArgs e) => OpenFolder(Path.Combine(StudioBackendClient.RepoRoot, "优化完成_原神可用"));
+    private void OpenRecommended_Click(object sender, RoutedEventArgs e) =>
+        OpenFolder(AppSettings.Load().OutputDir ?? Path.Combine(StudioBackendClient.RepoRoot, "优化完成_原神可用"));
+
+    private void SettingsNav_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var container = LibraryScroll.Content as FrameworkElement;
+            if (container is null) return;
+            var point = SettingsCard.TransformToVisual(container).TransformPoint(new Windows.Foundation.Point(0, 0));
+            LibraryScroll.ChangeView(null, point.Y, null, true);
+        }
+        catch
+        {
+        }
+    }
 
     private async void BrowseReference_Click(object sender, RoutedEventArgs e)
     {
@@ -74,13 +230,16 @@ public sealed partial class LibraryPage : Page
     {
         LibraryPanel.Children.Clear();
         var root = StudioBackendClient.RepoRoot;
-        var playableSource = Environment.GetEnvironmentVariable("GENSHIN_PLAYABLE_DIR")
+        var settings = AppSettings.Load();
+        var playableSource = settings.PlayableDir
+            ?? Environment.GetEnvironmentVariable("GENSHIN_PLAYABLE_DIR")
             ?? Path.Combine(root, "示例谱库", "成熟的原琴");
-        var backupSource = Environment.GetEnvironmentVariable("GENSHIN_BACKUP_DIR")
+        var backupSource = settings.BackupDir
+            ?? Environment.GetEnvironmentVariable("GENSHIN_BACKUP_DIR")
             ?? Path.Combine(root, "示例谱库", "不可播备份");
         var folders = new (string Name, string Path)[]
         {
-            ("推荐纯旋律", Path.Combine(root, "优化完成_原神可用")),
+            ("推荐纯旋律", settings.OutputDir ?? Path.Combine(root, "优化完成_原神可用")),
             ("和弦简化", Path.Combine(root, "优化完成_和弦简化_时长匹配")),
             ("成熟原琴源", playableSource),
             ("不可播备份源", backupSource),

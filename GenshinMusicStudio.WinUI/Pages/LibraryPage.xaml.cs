@@ -7,6 +7,8 @@ namespace GenshinMusicStudio_WinUI.Pages;
 
 public sealed partial class LibraryPage : Page
 {
+    private AppSettingsData settings = new();
+
     public LibraryPage()
     {
         InitializeComponent();
@@ -15,7 +17,13 @@ public sealed partial class LibraryPage : Page
 
     private async void LibraryPage_Loaded(object sender, RoutedEventArgs e)
     {
+        settings = AppSettings.Load();
         LoadSettingsIntoBoxes();
+        if (settings.LibraryFolders is null)
+        {
+            settings.LibraryFolders = AppSettings.DefaultLibraryFolders(settings, StudioBackendClient.RepoRoot);
+            AppSettings.Save(settings);
+        }
         RenderLibrary();
     }
 
@@ -34,7 +42,39 @@ public sealed partial class LibraryPage : Page
 
     private void SaveSettings_Click(object sender, RoutedEventArgs e)
     {
-        AppSettings.Save(new AppSettingsData
+        settings.PlayableDir = PlayableBox.Text.Trim();
+        settings.BackupDir = BackupBox.Text.Trim();
+        settings.OutputDir = OutputDirBox.Text.Trim();
+        AppSettings.Save(settings);
+        RenderLibrary();
+    }
+
+    private async void AddLibrary_Click(object sender, RoutedEventArgs e)
+    {
+        var path = await PickerHelper.PickFolderAsync();
+        if (path is null) return;
+        var normalized = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        settings.LibraryFolders ??= new List<LibraryFolderData>();
+        if (settings.LibraryFolders.Any(f => string.Equals(f.Path, normalized, StringComparison.OrdinalIgnoreCase)))
+        {
+            await ShowMessageAsync("目录已存在", "该目录已在谱库列表中。");
+            return;
+        }
+        settings.LibraryFolders.Add(new LibraryFolderData
+        {
+            Name = Path.GetFileName(normalized),
+            Path = normalized,
+        });
+        AppSettings.Save(settings);
+        RenderLibrary();
+    }
+
+    private void DeleteLibraryFolder(LibraryFolderData folder)
+    {
+        settings.LibraryFolders?.Remove(folder);
+        AppSettings.Save(settings);
+        RenderLibrary();
+    }
         {
             PlayableDir = PlayableBox.Text.Trim(),
             BackupDir = BackupBox.Text.Trim(),
@@ -229,24 +269,14 @@ public sealed partial class LibraryPage : Page
     private void RenderLibrary()
     {
         LibraryPanel.Children.Clear();
-        var root = StudioBackendClient.RepoRoot;
-        var settings = AppSettings.Load();
-        var playableSource = settings.PlayableDir
-            ?? Environment.GetEnvironmentVariable("GENSHIN_PLAYABLE_DIR")
-            ?? Path.Combine(root, "示例谱库", "成熟的原琴");
-        var backupSource = settings.BackupDir
-            ?? Environment.GetEnvironmentVariable("GENSHIN_BACKUP_DIR")
-            ?? Path.Combine(root, "示例谱库", "不可播备份");
-        var folders = new (string Name, string Path)[]
+        var folders = settings.LibraryFolders;
+        if (folders is null || folders.Count == 0)
         {
-            ("推荐纯旋律", settings.OutputDir ?? Path.Combine(root, "优化完成_原神可用")),
-            ("和弦简化", Path.Combine(root, "优化完成_和弦简化_时长匹配")),
-            ("成熟原琴源", playableSource),
-            ("不可播备份源", backupSource),
-            ("零丢音旧版", Path.Combine(root, "旧_零丢音_时长会变")),
-        };
+            folders = AppSettings.DefaultLibraryFolders(settings, StudioBackendClient.RepoRoot);
+            settings.LibraryFolders = folders;
+        }
 
-        foreach (var folder in folders)
+        foreach (var folder in folders.ToList())
         {
             var count = Directory.Exists(folder.Path)
                 ? Directory.EnumerateFiles(folder.Path, "*.mid", SearchOption.AllDirectories).Count()
@@ -264,6 +294,7 @@ public sealed partial class LibraryPage : Page
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(260) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             var iconBorder = new Border
@@ -300,6 +331,16 @@ public sealed partial class LibraryPage : Page
             open.Click += (_, _) => OpenFolder(folder.Path);
             Grid.SetColumn(open, 4);
             grid.Children.Add(open);
+
+            var delete = new Button
+            {
+                Content = new FontIcon { Glyph = "\uE74D" },
+                Padding = new Thickness(10, 6, 10, 6),
+                ToolTipService.ToolTip = "从列表移除",
+            };
+            delete.Click += (_, _) => DeleteLibraryFolder(folder);
+            Grid.SetColumn(delete, 5);
+            grid.Children.Add(delete);
 
             row.Child = grid;
             LibraryPanel.Children.Add(row);

@@ -21,6 +21,9 @@
                     <Button Click="Refresh_Click">
                         <StackPanel Orientation="Horizontal" Spacing="6"><FontIcon Glyph="&#xE72C;" /><TextBlock Text="刷新" /></StackPanel>
                     </Button>
+                    <Button Click="AddLibrary_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="6"><FontIcon Glyph="&#xE710;" /><TextBlock Text="添加目录" /></StackPanel>
+                    </Button>
                     <Button Click="SettingsNav_Click">
                         <StackPanel Orientation="Horizontal" Spacing="6"><FontIcon Glyph="&#xE713;" /><TextBlock Text="设置" /></StackPanel>
                     </Button>

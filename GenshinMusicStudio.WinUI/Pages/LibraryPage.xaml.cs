@@ -198,20 +198,6 @@ public sealed partial class LibraryPage : Page
     private void OpenRecommended_Click(object sender, RoutedEventArgs e) =>
         OpenFolder(AppSettings.Load().OutputDir ?? Path.Combine(StudioBackendClient.RepoRoot, "优化完成_原神可用"));
 
-    private void SettingsNav_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            var container = LibraryScroll.Content as FrameworkElement;
-            if (container is null) return;
-            var point = SettingsCard.TransformToVisual(container).TransformPoint(new Windows.Foundation.Point(0, 0));
-            LibraryScroll.ChangeView(null, point.Y, null, true);
-        }
-        catch
-        {
-        }
-    }
-
     private async void BrowseReference_Click(object sender, RoutedEventArgs e)
     {
         var path = await PickerHelper.PickFileAsync(".mid", ".midi");

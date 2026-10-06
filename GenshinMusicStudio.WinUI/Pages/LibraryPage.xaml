@@ -12,7 +12,7 @@
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel Spacing="2">
                     <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="我的谱库" />
-                    <TextBlock Text="曲谱目录：推荐输出目录和通过环境变量配置的源谱库" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock Text="管理谱库目录、路径设置和谱库迁移" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                     <Button Click="OpenRecommended_Click">
@@ -21,36 +21,21 @@
                     <Button Click="Refresh_Click">
                         <StackPanel Orientation="Horizontal" Spacing="6"><FontIcon Glyph="&#xE72C;" /><TextBlock Text="刷新" /></StackPanel>
                     </Button>
-                    <Button Click="AddLibrary_Click">
-                        <StackPanel Orientation="Horizontal" Spacing="6"><FontIcon Glyph="&#xE710;" /><TextBlock Text="添加目录" /></StackPanel>
-                    </Button>
-                    <Button Click="SettingsNav_Click">
-                        <StackPanel Orientation="Horizontal" Spacing="6"><FontIcon Glyph="&#xE713;" /><TextBlock Text="设置" /></StackPanel>
-                    </Button>
                 </StackPanel>
             </Grid>
 
             <Border Padding="16" CornerRadius="12" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
                 <StackPanel Spacing="10">
-                    <Grid ColumnSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="2*"/>
-                            <ColumnDefinition Width="1.2*"/>
-                            <ColumnDefinition Width="1.2*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <ComboBox SelectedIndex="0"><ComboBoxItem Content="全部版本" /></ComboBox>
-                        <ComboBox Grid.Column="1" SelectedIndex="0"><ComboBoxItem Content="全部格式" /></ComboBox>
-                        <ComboBox Grid.Column="2" SelectedIndex="0"><ComboBoxItem Content="全部乐器" /></ComboBox>
-                        <Button Grid.Column="3" Width="42" Padding="0" Click="Refresh_Click"><FontIcon Glyph="&#xE72C;" /></Button>
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="谱库管理" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Click="AddLibrary_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="6"><FontIcon Glyph="&#xE710;" /><TextBlock Text="添加目录" /></StackPanel>
+                        </Button>
                     </Grid>
                     <StackPanel x:Name="LibraryPanel" Spacing="6" />
-                </StackPanel>
-            </Border>
 
-            <Border x:Name="SettingsCard" Padding="16" CornerRadius="12" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
-                <StackPanel Spacing="10">
-                    <TextBlock Text="谱库路径设置" FontWeight="SemiBold" />
+                    <TextBlock Text="路径设置" FontWeight="SemiBold" Margin="0,10,0,0" />
                     <Grid ColumnSpacing="8" RowSpacing="8">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
@@ -74,12 +59,8 @@
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <Button x:Name="SaveSettingsButton" Content="保存设置" Style="{StaticResource AccentButtonStyle}" Click="SaveSettings_Click" />
                     </StackPanel>
-                </StackPanel>
-            </Border>
 
-            <Border x:Name="MigrateCard" Padding="16" CornerRadius="12" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
-                <StackPanel Spacing="10">
-                    <TextBlock Text="谱库迁移" FontWeight="SemiBold" />
+                    <TextBlock Text="谱库迁移" FontWeight="SemiBold" Margin="0,10,0,0" />
                     <TextBlock Text="把旧位置的 MIDI 文件复制或移动到新目录，同名文件会跳过。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
                     <Grid ColumnSpacing="8" RowSpacing="8">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>

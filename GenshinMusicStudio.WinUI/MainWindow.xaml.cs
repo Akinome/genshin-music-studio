@@ -14,7 +14,7 @@ namespace GenshinMusicStudio_WinUI;
 
 public sealed partial class MainWindow : Window
 {
-    private bool logExpanded = true;
+    private bool logExpanded = false;
 
     public MainWindow()
     {

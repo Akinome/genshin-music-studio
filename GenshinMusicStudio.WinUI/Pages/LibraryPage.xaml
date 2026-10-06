@@ -12,12 +12,9 @@
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel Spacing="2">
                     <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="我的谱库" />
-                    <TextBlock Text="管理谱库目录、路径设置和谱库迁移" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <TextBlock Text="管理谱库目录，支持添加、删除、设为默认和迁移" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <Button Click="OpenRecommended_Click">
-                        <StackPanel Orientation="Horizontal" Spacing="6"><FontIcon Glyph="&#xE8B7;" /><TextBlock Text="打开目录" /></StackPanel>
-                    </Button>
                     <Button Click="Refresh_Click">
                         <StackPanel Orientation="Horizontal" Spacing="6"><FontIcon Glyph="&#xE72C;" /><TextBlock Text="刷新" /></StackPanel>
                     </Button>

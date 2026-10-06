@@ -31,6 +31,8 @@ public sealed partial class LibraryPage : Page
         var path = await PickerHelper.PickFolderAsync();
         if (path is null) return;
         var normalized = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var folderName = Path.GetFileName(normalized);
+        if (string.IsNullOrWhiteSpace(folderName)) folderName = normalized;
         settings.LibraryFolders ??= new List<LibraryFolderData>();
         if (settings.LibraryFolders.Any(f => string.Equals(f.Path, normalized, StringComparison.OrdinalIgnoreCase)))
         {
@@ -39,7 +41,7 @@ public sealed partial class LibraryPage : Page
         }
         settings.LibraryFolders.Add(new LibraryFolderData
         {
-            Name = Path.GetFileName(normalized),
+            Name = folderName,
             Path = normalized,
         });
         AppSettings.Save(settings);
@@ -130,9 +132,6 @@ public sealed partial class LibraryPage : Page
     }
 
     private void Refresh_Click(object sender, RoutedEventArgs e) => RenderLibrary();
-
-    private void OpenRecommended_Click(object sender, RoutedEventArgs e) =>
-        OpenFolder(settings.OutputDir ?? Path.Combine(StudioBackendClient.RepoRoot, "优化完成_原神可用"));
 
     private async void BrowseReference_Click(object sender, RoutedEventArgs e)
     {
@@ -289,7 +288,6 @@ public sealed partial class LibraryPage : Page
             var menu = new MenuFlyout();
             menu.Items.Add(CreateMenuItem("设为推荐谱库", () => SetLibraryRole(folder, s => s.PlayableDir = folder.Path)));
             menu.Items.Add(CreateMenuItem("设为备份谱库", () => SetLibraryRole(folder, s => s.BackupDir = folder.Path)));
-            menu.Items.Add(CreateMenuItem("设为推荐输出", () => SetLibraryRole(folder, s => s.OutputDir = folder.Path)));
             menu.Items.Add(CreateMenuItem("迁移 MIDI 到新目录...", () => _ = MigrateFolderAsync(folder)));
             more.Flyout = menu;
             Grid.SetColumn(more, 6);
@@ -307,9 +305,13 @@ public sealed partial class LibraryPage : Page
         return item;
     }
 
-    private static void OpenFolder(string path)
+    private async void OpenFolder(string path)
     {
-        if (!Directory.Exists(path)) return;
+        if (!Directory.Exists(path))
+        {
+            await ShowMessageAsync("目录不存在", "该目录在磁盘上不存在。");
+            return;
+        }
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
     }
 }

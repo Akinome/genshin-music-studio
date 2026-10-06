@@ -34,55 +34,6 @@
                         </Button>
                     </Grid>
                     <StackPanel x:Name="LibraryPanel" Spacing="6" />
-
-                    <TextBlock Text="路径设置" FontWeight="SemiBold" Margin="0,10,0,0" />
-                    <Grid ColumnSpacing="8" RowSpacing="8">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-                        <TextBlock Text="推荐谱库" VerticalAlignment="Center" />
-                        <TextBox x:Name="PlayableBox" Grid.Column="1" />
-                        <Button Grid.Column="2" Content="选择" Click="BrowsePlayable_Click" />
-                        <Button Grid.Column="3" Content="打开" Click="OpenPlayable_Click" />
-                        <TextBlock Grid.Row="1" Text="备份谱库" VerticalAlignment="Center" />
-                        <TextBox x:Name="BackupBox" Grid.Row="1" Grid.Column="1" />
-                        <Button Grid.Row="1" Grid.Column="2" Content="选择" Click="BrowseBackup_Click" />
-                        <Button Grid.Row="1" Grid.Column="3" Content="打开" Click="OpenBackup_Click" />
-                        <TextBlock Grid.Row="2" Text="推荐输出" VerticalAlignment="Center" />
-                        <TextBox x:Name="OutputDirBox" Grid.Row="2" Grid.Column="1" />
-                        <Button Grid.Row="2" Grid.Column="2" Content="选择" Click="BrowseOutputDir_Click" />
-                        <Button Grid.Row="2" Grid.Column="3" Content="打开" Click="OpenOutputDir_Click" />
-                    </Grid>
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Button x:Name="SaveSettingsButton" Content="保存设置" Style="{StaticResource AccentButtonStyle}" Click="SaveSettings_Click" />
-                    </StackPanel>
-
-                    <TextBlock Text="谱库迁移" FontWeight="SemiBold" Margin="0,10,0,0" />
-                    <TextBlock Text="把旧位置的 MIDI 文件复制或移动到新目录，同名文件会跳过。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
-                    <Grid ColumnSpacing="8" RowSpacing="8">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-                        <TextBlock Text="源目录" VerticalAlignment="Center" />
-                        <TextBox x:Name="MigrateFromBox" Grid.Column="1" />
-                        <Button Grid.Column="2" Content="选择" Click="BrowseMigrateFrom_Click" />
-                        <TextBlock Grid.Row="1" Text="目标目录" VerticalAlignment="Center" />
-                        <TextBox x:Name="MigrateToBox" Grid.Row="1" Grid.Column="1" />
-                        <Button Grid.Row="1" Grid.Column="2" Content="选择" Click="BrowseMigrateTo_Click" />
-                        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
-                            <ComboBox x:Name="MigrateModeBox" SelectedIndex="0" MinWidth="110">
-                                <ComboBoxItem Content="复制" />
-                                <ComboBoxItem Content="移动" />
-                            </ComboBox>
-                            <Button x:Name="MigrateButton" Content="开始迁移" Style="{StaticResource AccentButtonStyle}" Click="Migrate_Click" />
-                        </StackPanel>
-                    </Grid>
                 </StackPanel>
             </Border>
 

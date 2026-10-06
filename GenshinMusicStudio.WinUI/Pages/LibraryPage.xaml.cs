@@ -15,37 +15,14 @@ public sealed partial class LibraryPage : Page
         Loaded += LibraryPage_Loaded;
     }
 
-    private async void LibraryPage_Loaded(object sender, RoutedEventArgs e)
+    private void LibraryPage_Loaded(object sender, RoutedEventArgs e)
     {
         settings = AppSettings.Load();
-        LoadSettingsIntoBoxes();
         if (settings.LibraryFolders is null)
         {
             settings.LibraryFolders = AppSettings.DefaultLibraryFolders(settings, StudioBackendClient.RepoRoot);
             AppSettings.Save(settings);
         }
-        RenderLibrary();
-    }
-
-    private void LoadSettingsIntoBoxes()
-    {
-        var settings = AppSettings.Load();
-        var root = StudioBackendClient.RepoRoot;
-        PlayableBox.Text = settings.PlayableDir
-            ?? Environment.GetEnvironmentVariable("GENSHIN_PLAYABLE_DIR")
-            ?? Path.Combine(root, "示例谱库", "成熟的原琴");
-        BackupBox.Text = settings.BackupDir
-            ?? Environment.GetEnvironmentVariable("GENSHIN_BACKUP_DIR")
-            ?? Path.Combine(root, "示例谱库", "不可播备份");
-        OutputDirBox.Text = settings.OutputDir ?? Path.Combine(root, "优化完成_原神可用");
-    }
-
-    private void SaveSettings_Click(object sender, RoutedEventArgs e)
-    {
-        settings.PlayableDir = PlayableBox.Text.Trim();
-        settings.BackupDir = BackupBox.Text.Trim();
-        settings.OutputDir = OutputDirBox.Text.Trim();
-        AppSettings.Save(settings);
         RenderLibrary();
     }
 
@@ -69,134 +46,93 @@ public sealed partial class LibraryPage : Page
         RenderLibrary();
     }
 
-    private void DeleteLibraryFolder(LibraryFolderData folder)
+    private void RemoveLibraryFolder(LibraryFolderData folder)
     {
         settings.LibraryFolders?.Remove(folder);
         AppSettings.Save(settings);
         RenderLibrary();
     }
-        {
-            PlayableDir = PlayableBox.Text.Trim(),
-            BackupDir = BackupBox.Text.Trim(),
-            OutputDir = OutputDirBox.Text.Trim(),
-        });
+
+    private void SetLibraryRole(LibraryFolderData folder, Action<AppSettingsData> apply)
+    {
+        apply(settings);
+        AppSettings.Save(settings);
         RenderLibrary();
     }
 
-    private async void BrowsePlayable_Click(object sender, RoutedEventArgs e)
+    private async Task MigrateFolderAsync(LibraryFolderData folder)
     {
-        var path = await PickerHelper.PickFolderAsync();
-        if (path is not null) PlayableBox.Text = path;
-    }
-
-    private async void BrowseBackup_Click(object sender, RoutedEventArgs e)
-    {
-        var path = await PickerHelper.PickFolderAsync();
-        if (path is not null) BackupBox.Text = path;
-    }
-
-    private async void BrowseOutputDir_Click(object sender, RoutedEventArgs e)
-    {
-        var path = await PickerHelper.PickFolderAsync();
-        if (path is not null) OutputDirBox.Text = path;
-    }
-
-    private void OpenPlayable_Click(object sender, RoutedEventArgs e) => OpenFolder(PlayableBox.Text);
-    private void OpenBackup_Click(object sender, RoutedEventArgs e) => OpenFolder(BackupBox.Text);
-    private void OpenOutputDir_Click(object sender, RoutedEventArgs e) => OpenFolder(OutputDirBox.Text);
-
-    private async void BrowseMigrateFrom_Click(object sender, RoutedEventArgs e)
-    {
-        var path = await PickerHelper.PickFolderAsync();
-        if (path is not null) MigrateFromBox.Text = path;
-    }
-
-    private async void BrowseMigrateTo_Click(object sender, RoutedEventArgs e)
-    {
-        var path = await PickerHelper.PickFolderAsync();
-        if (path is not null) MigrateToBox.Text = path;
-    }
-
-    private async void Migrate_Click(object sender, RoutedEventArgs e)
-    {
-        var from = MigrateFromBox.Text.Trim();
-        var to = MigrateToBox.Text.Trim();
-        var move = (MigrateModeBox.SelectedItem as ComboBoxItem)?.Content?.ToString() == "移动";
-        if (string.IsNullOrWhiteSpace(from) || !Directory.Exists(from))
+        if (!Directory.Exists(folder.Path))
         {
-            await ShowMessageAsync("缺少源目录", "请选择有效的源目录。");
+            await ShowMessageAsync("目录不存在", "该目录在磁盘上不存在，请先移除或重新添加。");
             return;
         }
-        if (string.IsNullOrWhiteSpace(to))
+        var target = await PickerHelper.PickFolderAsync();
+        if (target is null) return;
+        target = target.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (string.Equals(Path.GetFullPath(folder.Path), Path.GetFullPath(target), StringComparison.OrdinalIgnoreCase))
         {
-            await ShowMessageAsync("缺少目标目录", "请选择目标目录。");
-            return;
-        }
-        if (string.Equals(Path.GetFullPath(from), Path.GetFullPath(to), StringComparison.OrdinalIgnoreCase))
-        {
-            await ShowMessageAsync("路径相同", "源目录和目标目录不能相同。");
+            await ShowMessageAsync("路径相同", "目标目录不能和当前目录相同。");
             return;
         }
 
-        var files = Directory.EnumerateFiles(from, "*.*", SearchOption.AllDirectories)
+        var files = Directory.EnumerateFiles(folder.Path, "*.*", SearchOption.AllDirectories)
             .Where(f => f.EndsWith(".mid", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".midi", StringComparison.OrdinalIgnoreCase))
             .ToList();
         if (files.Count == 0)
         {
-            await ShowMessageAsync("没有找到 MIDI", "源目录中没有 MIDI 文件。");
+            await ShowMessageAsync("没有找到 MIDI", "该目录中没有 MIDI 文件。");
             return;
         }
 
         var confirm = await new ContentDialog
         {
-            Title = "确认迁移",
-            Content = string.Format("将在目标目录中{0} {1} 个 MIDI 文件，同名文件跳过。是否继续？", move ? "移动" : "复制", files.Count),
-            PrimaryButtonText = "开始",
+            Title = "迁移 MIDI 文件",
+            Content = string.Format(
+                "将把 {0} 个 MIDI 文件从 {1} 迁移到 {2}，同名文件跳过。",
+                files.Count, folder.Name, Path.GetFileName(target)),
+            PrimaryButtonText = "移动",
+            SecondaryButtonText = "复制",
             CloseButtonText = "取消",
             XamlRoot = XamlRoot,
         }.ShowAsync();
-        if (confirm != ContentDialogResult.Primary) return;
+        if (confirm == ContentDialogResult.None) return;
+        var move = confirm == ContentDialogResult.Primary;
 
-        MigrateButton.IsEnabled = false;
         var copied = 0;
         var skipped = 0;
         var failed = 0;
-        try
+        Directory.CreateDirectory(target);
+        foreach (var file in files)
         {
-            Directory.CreateDirectory(to);
-            foreach (var file in files)
+            var targetPath = Path.Combine(target, Path.GetFileName(file));
+            try
             {
-                var target = Path.Combine(to, Path.GetFileName(file));
-                try
+                if (File.Exists(targetPath))
                 {
-                    if (File.Exists(target))
-                    {
-                        skipped++;
-                        continue;
-                    }
-                    if (move) File.Move(file, target);
-                    else File.Copy(file, target);
-                    copied++;
+                    skipped++;
+                    continue;
                 }
-                catch
-                {
-                    failed++;
-                }
+                if (move) File.Move(file, targetPath);
+                else File.Copy(file, targetPath);
+                copied++;
+            }
+            catch
+            {
+                failed++;
             }
         }
-        finally
-        {
-            MigrateButton.IsEnabled = true;
-        }
 
-        await ShowMessageAsync("迁移完成", string.Format("{0} {1} 个，跳过 {2} 个，失败 {3} 个。", move ? "移动" : "复制", copied, skipped, failed));
+        await ShowMessageAsync(
+            "迁移完成",
+            string.Format("{0} {1} 个，跳过 {2} 个，失败 {3} 个。", move ? "移动" : "复制", copied, skipped, failed));
         RenderLibrary();
     }
 
-
     private void Refresh_Click(object sender, RoutedEventArgs e) => RenderLibrary();
+
     private void OpenRecommended_Click(object sender, RoutedEventArgs e) =>
-        OpenFolder(AppSettings.Load().OutputDir ?? Path.Combine(StudioBackendClient.RepoRoot, "优化完成_原神可用"));
+        OpenFolder(settings.OutputDir ?? Path.Combine(StudioBackendClient.RepoRoot, "优化完成_原神可用"));
 
     private async void BrowseReference_Click(object sender, RoutedEventArgs e)
     {
@@ -279,7 +215,8 @@ public sealed partial class LibraryPage : Page
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(40) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(260) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
@@ -295,7 +232,12 @@ public sealed partial class LibraryPage : Page
 
             var title = new StackPanel { Spacing = 2 };
             title.Children.Add(new TextBlock { Text = folder.Name, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-            title.Children.Add(new TextBlock { Text = "MIDI  ·  风物之诗琴  ·  推荐谱库", Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"], FontSize = 11 });
+            title.Children.Add(new TextBlock
+            {
+                Text = "MIDI  ·  风物之诗琴",
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                FontSize = 11,
+            });
             Grid.SetColumn(title, 1);
             grid.Children.Add(title);
 
@@ -313,24 +255,51 @@ public sealed partial class LibraryPage : Page
             Grid.SetColumn(pathText, 3);
             grid.Children.Add(pathText);
 
-            var open = new Button { Content = new FontIcon { Glyph = "\uE8A7" }, Padding = new Thickness(10, 6, 10, 6) };
+            var open = new Button
+            {
+                Content = new FontIcon { Glyph = "\uE8A7" },
+                Padding = new Thickness(10, 6, 10, 6),
+            };
+            ToolTipService.SetToolTip(open, "打开目录");
             open.Click += (_, _) => OpenFolder(folder.Path);
             Grid.SetColumn(open, 4);
             grid.Children.Add(open);
 
-            var delete = new Button
+            var remove = new Button
             {
                 Content = new FontIcon { Glyph = "\uE74D" },
                 Padding = new Thickness(10, 6, 10, 6),
-                ToolTipService.ToolTip = "从列表移除",
             };
-            delete.Click += (_, _) => DeleteLibraryFolder(folder);
-            Grid.SetColumn(delete, 5);
-            grid.Children.Add(delete);
+            ToolTipService.SetToolTip(remove, "从列表移除");
+            remove.Click += (_, _) => RemoveLibraryFolder(folder);
+            Grid.SetColumn(remove, 5);
+            grid.Children.Add(remove);
+
+            var more = new Button
+            {
+                Content = new FontIcon { Glyph = "\uE712" },
+                Padding = new Thickness(10, 6, 10, 6),
+            };
+            ToolTipService.SetToolTip(more, "更多操作");
+            var menu = new MenuFlyout();
+            menu.Items.Add(CreateMenuItem("设为推荐谱库", () => SetLibraryRole(folder, s => s.PlayableDir = folder.Path)));
+            menu.Items.Add(CreateMenuItem("设为备份谱库", () => SetLibraryRole(folder, s => s.BackupDir = folder.Path)));
+            menu.Items.Add(CreateMenuItem("设为推荐输出", () => SetLibraryRole(folder, s => s.OutputDir = folder.Path)));
+            menu.Items.Add(CreateMenuItem("迁移 MIDI 到新目录...", () => _ = MigrateFolderAsync(folder)));
+            more.Flyout = menu;
+            Grid.SetColumn(more, 6);
+            grid.Children.Add(more);
 
             row.Child = grid;
             LibraryPanel.Children.Add(row);
         }
+    }
+
+    private static MenuFlyoutItem CreateMenuItem(string text, Action action)
+    {
+        var item = new MenuFlyoutItem { Text = text };
+        item.Click += (_, _) => action();
+        return item;
     }
 
     private static void OpenFolder(string path)

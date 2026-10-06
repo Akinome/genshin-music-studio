@@ -34,7 +34,6 @@ if (-not (Test-Path -LiteralPath $buildDir)) {
 Copy-Item -Path (Join-Path $buildDir "*") -Destination $appDir -Recurse -Force
 Get-ChildItem -LiteralPath $appDir -Recurse -Filter "*.pdb" -File | Remove-Item -Force
 
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot "launcher.bat") -Destination (Join-Path $appDir "Start.bat") -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "README-RELEASE.txt") -Destination (Join-Path $appDir "README.txt") -Force
 Copy-Item -LiteralPath (Join-Path $root "scripts\install_ai_env_uv.bat") -Destination $appDir -Force
 $backendFiles = @(

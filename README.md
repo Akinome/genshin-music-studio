@@ -80,8 +80,7 @@ GenshinMusicStudio-win-x64.zip
 
 解压后：
 
-1. 双击 `Start.bat`
-2. 或直接运行 `GenshinMusicStudio.WinUI.exe`
+双击 `GenshinMusicStudio.WinUI.exe` 运行。
 
 基础 ONNX 扒谱不需要 Python。下载功能需要系统已安装：
 

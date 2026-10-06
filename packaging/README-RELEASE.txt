@@ -2,8 +2,7 @@ Genshin Music Studio - Windows x64
 ==================================
 
 启动方式：
-1. 双击“Start.bat”
-2. 或直接运行 GenshinMusicStudio.WinUI.exe
+双击 GenshinMusicStudio.WinUI.exe 运行。
 
 基础功能：
 - WinUI 3 原生界面

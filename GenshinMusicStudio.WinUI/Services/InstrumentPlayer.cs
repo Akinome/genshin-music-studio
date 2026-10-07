@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using NAudio;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
@@ -10,9 +11,11 @@ public sealed class InstrumentPlayer : IDisposable
 
     private readonly object gate = new();
     private readonly Dictionary<int, float[]> samples = new();
+    private readonly Dictionary<int, List<CachedSampleSource>> activeVoices = new();
     private WaveOutEvent? output;
     private MixingSampleProvider? mixer;
     private string currentInstrument = string.Empty;
+    private double releaseSeconds;
 
     public string CurrentInstrument => currentInstrument;
 
@@ -21,7 +24,9 @@ public sealed class InstrumentPlayer : IDisposable
         lock (gate)
         {
             samples.Clear();
+            activeVoices.Clear();
             currentInstrument = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar));
+            releaseSeconds = ReadReleaseSeconds(folder);
             foreach (var file in Directory.EnumerateFiles(folder, "*.mp3"))
             {
                 var name = Path.GetFileNameWithoutExtension(file);
@@ -47,6 +52,29 @@ public sealed class InstrumentPlayer : IDisposable
             if (mixer is null || !samples.TryGetValue(keyIndex, out var buffer)) return;
             var source = new CachedSampleSource(buffer) { Gain = (float)Math.Clamp(gain, 0.05, 1.0) };
             mixer.AddMixerInput(source);
+            if (releaseSeconds > 0)
+            {
+                if (!activeVoices.TryGetValue(keyIndex, out var voices))
+                {
+                    voices = new List<CachedSampleSource>();
+                    activeVoices[keyIndex] = voices;
+                }
+                voices.Add(source);
+            }
+        }
+    }
+
+    public void NoteOff(int keyIndex)
+    {
+        lock (gate)
+        {
+            if (releaseSeconds <= 0) return;
+            if (!activeVoices.TryGetValue(keyIndex, out var voices)) return;
+            foreach (var voice in voices)
+            {
+                voice.StartFade(releaseSeconds);
+            }
+            voices.Clear();
         }
     }
 
@@ -71,6 +99,26 @@ public sealed class InstrumentPlayer : IDisposable
         output = new WaveOutEvent();
         output.Init(mixer);
         output.Play();
+    }
+
+    private static double ReadReleaseSeconds(string folder)
+    {
+        try
+        {
+            var metaPath = Path.Combine(folder, "meta.json");
+            if (!File.Exists(metaPath)) return 0;
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(metaPath));
+            if (doc.RootElement.TryGetProperty("sustain", out var sustain)
+                && sustain.TryGetProperty("release", out var release)
+                && release.TryGetDouble(out var seconds))
+            {
+                return Math.Clamp(seconds, 0, 5);
+            }
+        }
+        catch
+        {
+        }
+        return 0;
     }
 
     private static float[] LoadSampleBuffer(string file)
@@ -111,9 +159,16 @@ public sealed class InstrumentPlayer : IDisposable
     {
         private readonly float[] buffer;
         private int position;
+        private long fadeStart;
+        private double fadeSeconds;
 
         public WaveFormat WaveFormat { get; }
         public float Gain { get; set; } = 1f;
+        public void StartFade(double seconds)
+        {
+            fadeStart = Stopwatch.GetTimestamp();
+            fadeSeconds = seconds;
+        }
 
         public CachedSampleSource(float[] buffer)
         {
@@ -126,9 +181,22 @@ public sealed class InstrumentPlayer : IDisposable
             var available = buffer.Length - position;
             if (available <= 0) return 0;
             var toCopy = Math.Min(count, available);
-            for (var i = 0; i < toCopy; i++)
+            if (fadeSeconds > 0)
             {
-                target[offset + i] = buffer[position + i] * Gain;
+                var elapsed = (Stopwatch.GetTimestamp() - fadeStart) / (double)Stopwatch.Frequency;
+                if (elapsed >= fadeSeconds) return 0;
+                var fadeGain = (float)(Gain * (1.0 - elapsed / fadeSeconds));
+                for (var i = 0; i < toCopy; i++)
+                {
+                    target[offset + i] = buffer[position + i] * fadeGain;
+                }
+            }
+            else
+            {
+                for (var i = 0; i < toCopy; i++)
+                {
+                    target[offset + i] = buffer[position + i] * Gain;
+                }
             }
             position += toCopy;
             return toCopy;

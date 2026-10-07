@@ -184,7 +184,11 @@ public sealed class MidiPlayer : IDisposable
                         midiOutShortMsg(handle, ScaleVelocity(0x90 | (Key21Layout.FoldPitch(evt.Pitch) << 8) | (evt.Velocity << 16), velocityBoost));
                     }
                 }
-                else if (Instrument is null)
+                else if (Instrument is not null)
+                {
+                    Instrument.NoteOff(Key21Layout.ButtonNumberForPitch(evt.Pitch));
+                }
+                else
                 {
                     midiOutShortMsg(handle, 0x80 | (Key21Layout.FoldPitch(evt.Pitch) << 8));
                 }

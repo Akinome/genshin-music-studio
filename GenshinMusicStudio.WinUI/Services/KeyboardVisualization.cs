@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using Windows.Foundation;
@@ -128,6 +129,13 @@ public sealed class KeyboardVisualization : IMidiVisualization
                 Stroke = new SolidColorBrush(GlowNear),
                 StrokeThickness = 2,
                 Tag = keyIndex,
+                RenderTransform = new ScaleTransform
+                {
+                    ScaleX = 1,
+                    ScaleY = 1,
+                    CenterX = diameter / 2,
+                    CenterY = diameter / 2,
+                },
             };
             Canvas.SetLeft(circle, centerX - diameter / 2);
             Canvas.SetTop(circle, centerY - diameter / 2);
@@ -242,12 +250,47 @@ public sealed class KeyboardVisualization : IMidiVisualization
     {
         SetKeyBrush(keyIndex, HitFill, HitFill, HitGlow);
         SetLabelBrush(keyIndex, true);
+        AnimateKeyScale(keyIndex, 1.0, 0.86, 90);
     }
 
     private void ReleaseKey(int keyIndex)
     {
         SetKeyBrush(keyIndex, KeyFill, GlowNear, Windows.UI.Color.FromArgb(0, 255, 255, 255));
         SetLabelBrush(keyIndex, false);
+        AnimateKeyScale(keyIndex, 0.86, 1.0, 140);
+    }
+
+    private void AnimateKeyScale(int keyIndex, double from, double to, int milliseconds)
+    {
+        var key = FindKeyEllipse(keyIndex);
+        if (key?.RenderTransform is not ScaleTransform scale) return;
+        scale.ScaleX = from;
+        scale.ScaleY = from;
+        var storyboard = new Storyboard();
+        foreach (var property in new[] { "ScaleX", "ScaleY" })
+        {
+            var animation = new DoubleAnimation
+            {
+                From = from,
+                To = to,
+                Duration = new Duration(TimeSpan.FromMilliseconds(milliseconds)),
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
+            };
+            Storyboard.SetTarget(animation, scale);
+            Storyboard.SetTargetProperty(animation, property);
+            storyboard.Children.Add(animation);
+        }
+        storyboard.Begin();
+    }
+
+    private Ellipse? FindKeyEllipse(int keyIndex)
+    {
+        if (keyCanvas is null) return null;
+        foreach (var child in keyCanvas.Children.OfType<Ellipse>())
+        {
+            if (child.Tag is int index && index == keyIndex) return child;
+        }
+        return null;
     }
 
     private void UpdatePulses(double position)

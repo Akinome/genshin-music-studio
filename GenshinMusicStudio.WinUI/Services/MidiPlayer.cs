@@ -41,6 +41,7 @@ public sealed class MidiPlayer : IDisposable
 
     public event Action<bool>? PlayingChanged;
     public event Action<string, double, double>? ProgressChanged;
+    public event Action<string>? PlaybackError;
 
     public bool IsPlaying => thread is { IsAlive: true } && !stopRequested;
     public string? PlayingFolder { get; private set; }
@@ -171,6 +172,10 @@ public sealed class MidiPlayer : IDisposable
                 Thread.Sleep(200);
                 tail = total + 0.8 - clock.Elapsed.TotalSeconds;
             }
+        }
+        catch (Exception ex)
+        {
+            PlaybackError?.Invoke(ex.Message);
         }
         finally
         {

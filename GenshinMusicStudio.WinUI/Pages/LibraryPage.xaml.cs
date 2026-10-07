@@ -84,10 +84,19 @@ public sealed partial class LibraryPage : Page
             _ = ShowMessageAsync("目录不存在", "该目录在磁盘上不存在。");
             return;
         }
-        var files = Directory.EnumerateFiles(folder.Path, "*.*", SearchOption.AllDirectories)
-            .Where(f => f.EndsWith(".mid", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".midi", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        List<string> files;
+        try
+        {
+            files = Directory.EnumerateFiles(folder.Path, "*.*", SearchOption.AllDirectories)
+                .Where(f => f.EndsWith(".mid", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".midi", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _ = ShowMessageAsync("无法读取目录", ex.Message);
+            return;
+        }
         if (files.Count == 0)
         {
             _ = ShowMessageAsync("没有找到 MIDI", "该目录中没有 MIDI 文件。");

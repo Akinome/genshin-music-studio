@@ -36,6 +36,7 @@ public sealed partial class MainWindow : Window
         App.Backend.RunningChanged += Backend_RunningChanged;
         App.Player.ProgressChanged += Player_ProgressChanged;
         App.Player.PlayingChanged += Player_PlayingChanged;
+        App.Player.PlaybackError += Player_PlaybackError;
         App.Player.Volume = AppSettings.Load().Volume ?? 0.9;
         App.Player.VelocityBoost = AppSettings.Load().VelocityBoost ?? 1.5;
         Closed += (_, _) => App.Player.Stop();
@@ -63,6 +64,15 @@ public sealed partial class MainWindow : Window
             StatusText.Text = string.Format("正在播放: {0}  ({1:0}:{2:00} / {3:0}:{4:00})",
                 name, (int)(position / 60), (int)position % 60, (int)(duration / 60), (int)duration % 60);
             RunProgress.Value = duration > 0 ? Math.Clamp(position / duration * 100, 0, 100) : 0;
+        });
+    }
+
+    private void Player_PlaybackError(string message)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            StatusText.Text = "播放失败";
+            AppendLog("播放失败：" + message);
         });
     }
 

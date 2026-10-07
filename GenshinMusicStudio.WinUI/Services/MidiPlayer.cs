@@ -145,7 +145,7 @@ public sealed class MidiPlayer : IDisposable
                 {
                     for (var note = 0; note < 128; note++)
                     {
-                        midiOutShortMsg(handle, 0x80 | note);
+                        midiOutShortMsg(handle, 0x80 | (note << 8));
                     }
                     midiOutClose(handle);
                     opened = false;
@@ -180,7 +180,7 @@ public sealed class MidiPlayer : IDisposable
             ranges.Add((offset, duration));
             foreach (var (time, isOn, pitch, velocity) in fileEvents)
             {
-                var message = isOn ? 0x90 | pitch | (velocity << 8) : 0x80 | pitch;
+                var message = isOn ? 0x90 | (pitch << 8) | (velocity << 16) : 0x80 | (pitch << 8);
                 events.Add(new MidiEvent { Time = offset + time, Message = FoldMessage(message) });
             }
             offset += duration + 0.6;
@@ -196,7 +196,12 @@ public sealed class MidiPlayer : IDisposable
         var note = (message >> 8) & 0x7F;
         while (note < LowNote) note += 12;
         while (note > HighNote) note -= 12;
-        return (message & 0xFF00FF) | (note << 8);
+        if (status == 0x90)
+        {
+            var velocity = (message >> 16) & 0x7F;
+            return 0x90 | (note << 8) | (velocity << 16);
+        }
+        return 0x80 | (note << 8);
     }
 
     private static (List<(double Time, bool IsOn, int Pitch, int Velocity)> Events, double Duration) ParseMidiFile(string path)

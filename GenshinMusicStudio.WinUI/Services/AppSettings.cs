@@ -11,6 +11,7 @@ public sealed class AppSettingsData
     [JsonPropertyName("library_folders")] public List<LibraryFolderData>? LibraryFolders { get; set; }
     [JsonPropertyName("volume")] public double? Volume { get; set; }
     [JsonPropertyName("velocity_boost")] public double? VelocityBoost { get; set; }
+    [JsonPropertyName("audio_instrument")] public string? AudioInstrument { get; set; }
 }
 
 public sealed class LibraryFolderData

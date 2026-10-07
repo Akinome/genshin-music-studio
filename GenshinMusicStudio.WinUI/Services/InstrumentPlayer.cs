@@ -123,8 +123,10 @@ public sealed class InstrumentPlayer : IDisposable
 
     private static float[] LoadSampleBuffer(string file)
     {
-        using var reader = new AudioFileReader(file);
-        ISampleProvider source = reader;
+        using WaveStream reader = file.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase)
+            ? new Mp3FileReader(file)
+            : new AudioFileReader(file);
+        ISampleProvider source = reader.ToSampleProvider();
         if (reader.WaveFormat.SampleRate != TargetRate)
         {
             source = new WdlResamplingSampleProvider(source, TargetRate);

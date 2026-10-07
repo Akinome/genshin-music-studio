@@ -10,6 +10,7 @@ namespace GenshinMusicStudio_WinUI.Services;
 public sealed class KeyboardVisualization : IMidiVisualization
 {
     private const double HighlightInterval = 0.05;
+    private const double PixelsPerSecond = 120;
 
     // genshin.music palette: #fff9ef / #eae5ce keys in light, #495466 in dark.
     private static readonly Windows.UI.Color KeyFillLight = Windows.UI.Color.FromArgb(255, 255, 249, 239);
@@ -25,6 +26,10 @@ public sealed class KeyboardVisualization : IMidiVisualization
     private Grid? viewport;
     private double lastHighlight;
     private double lastPosition;
+    private Canvas? fallCanvas;
+    private TranslateTransform? transform;
+    private double renderBase;
+    private double keyboardHeight = 150;
     private readonly Dictionary<int, List<MidiPlayer.MidiNote>> keyNotes = new();
     private readonly HashSet<int> litKeys = new();
     private double keyWidth = 70;
@@ -51,6 +56,11 @@ public sealed class KeyboardVisualization : IMidiVisualization
         }
 
         owner.Children.Clear();
+        fallCanvas = new Canvas();
+        transform = new TranslateTransform();
+        fallCanvas.RenderTransform = transform;
+        owner.Children.Add(fallCanvas);
+
         keyCanvas = new Canvas
         {
             VerticalAlignment = VerticalAlignment.Bottom,
@@ -58,11 +68,31 @@ public sealed class KeyboardVisualization : IMidiVisualization
         };
         owner.Children.Add(keyCanvas);
         BuildKeyboard();
+        var hitLine = new Rectangle
+        {
+            Height = 2,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(0, 0, 0, keyCanvas.Height + 12),
+            Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(90, 218, 165, 82)),
+            IsHitTestVisible = false,
+        };
+        owner.Children.Add(hitLine);
         lastHighlight = -1;
+        renderBase = 0;
+        RenderFallWindow(0);
     }
 
     public void Update(double position)
     {
+        if (fallCanvas is not null && transform is not null)
+        {
+            if (position - renderBase >= 0.5)
+            {
+                renderBase = Math.Floor(position / 0.5) * 0.5;
+                RenderFallWindow(renderBase);
+            }
+            transform.Y = (position - renderBase) * PixelsPerSecond;
+        }
         if (position - lastHighlight >= HighlightInterval)
         {
             lastHighlight = position;
@@ -72,8 +102,68 @@ public sealed class KeyboardVisualization : IMidiVisualization
 
     public void Reset()
     {
+        renderBase = 0;
+        if (transform is not null) transform.Y = 0;
+        RenderFallWindow(0);
         lastHighlight = -1;
         ClearLitKeys();
+    }
+
+    private void RenderFallWindow(double baseTime)
+    {
+        if (fallCanvas is null || viewport is null || transform is null) return;
+        var viewportWidth = SafeWidth();
+        var fallHeight = SafeHeight() - keyCanvas.Height - 14;
+        if (fallHeight < 60) fallHeight = 60;
+        var windowSeconds = fallHeight / PixelsPerSecond + 1.5;
+        var canvasHeight = windowSeconds * PixelsPerSecond;
+        var keyboardWidth = keyWidth * 7;
+        var fallWidth = Math.Max(keyboardWidth, viewportWidth);
+        var offsetX = (fallWidth - keyboardWidth) / 2;
+        fallCanvas.Width = fallWidth;
+        fallCanvas.Height = canvasHeight;
+        fallCanvas.Children.Clear();
+
+        var laneBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(20, 128, 128, 128));
+        for (var degree = 0; degree < 7; degree++)
+        {
+            var line = new Rectangle
+            {
+                Width = 1,
+                Height = canvasHeight,
+                Fill = laneBrush,
+            };
+            Canvas.SetLeft(line, offsetX + degree * keyWidth + keyWidth / 2);
+            Canvas.SetTop(line, 0);
+            fallCanvas.Children.Add(line);
+        }
+
+        var noteFill = IsDarkTheme
+            ? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 73, 84, 102))
+            : new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 249, 239));
+        foreach (var note in notes)
+        {
+            if (note.End < baseTime - 0.1) continue;
+            if (note.Start > baseTime + windowSeconds) continue;
+            var top = canvasHeight - (note.End - baseTime) * PixelsPerSecond;
+            if (top < -fallHeight || top > canvasHeight) continue;
+            var degree = Key21Layout.KeyIndexForPitch(note.Pitch) % 7;
+            var rect = new Rectangle
+            {
+                Width = Math.Max(6, keyWidth - 18),
+                Height = Math.Max(6, (note.End - note.Start) * PixelsPerSecond),
+                RadiusX = 6,
+                RadiusY = 6,
+                Fill = noteFill,
+                Opacity = 0.92,
+                Tag = note,
+                Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(60, 128, 128, 128)),
+                StrokeThickness = 1,
+            };
+            Canvas.SetLeft(rect, offsetX + degree * keyWidth + (keyWidth - rect.Width) / 2);
+            Canvas.SetTop(rect, top);
+            fallCanvas.Children.Add(rect);
+        }
     }
 
     private void BuildKeyboard()

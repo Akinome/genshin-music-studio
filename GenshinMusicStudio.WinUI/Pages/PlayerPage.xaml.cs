@@ -142,6 +142,18 @@ public sealed partial class PlayerPage : Page
             }
         }
         AudioBox.SelectedIndex = 0;
+        var saved = AppSettings.Load().AudioInstrument;
+        if (!string.IsNullOrEmpty(saved))
+        {
+            foreach (var item in AudioBox.Items.OfType<ComboBoxItem>())
+            {
+                if (string.Equals(item.Tag?.ToString(), saved, StringComparison.OrdinalIgnoreCase))
+                {
+                    AudioBox.SelectedItem = item;
+                    break;
+                }
+            }
+        }
         AudioBox.SelectionChanged += AudioBox_SelectionChanged;
     }
 
@@ -170,6 +182,9 @@ public sealed partial class PlayerPage : Page
         {
             PlayButton.IsEnabled = true;
         }
+        var settings = AppSettings.Load();
+        settings.AudioInstrument = folder;
+        AppSettings.Save(settings);
     }
 
     private void VolumeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)

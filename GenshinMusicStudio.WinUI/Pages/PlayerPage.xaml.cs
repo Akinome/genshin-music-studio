@@ -135,7 +135,7 @@ public sealed partial class PlayerPage : Page
         DispatcherQueue.TryEnqueue(() =>
         {
             UpdateControls();
-            if (!playing)
+            if (!playing && !App.Player.IsPlaying)
             {
                 renderTimer?.Stop();
                 renderBase = 0;

@@ -29,6 +29,25 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+        this.UnhandledException += OnUnhandledException;
+    }
+
+    private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    {
+        try
+        {
+            var logDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "GenshinMusicStudio");
+            Directory.CreateDirectory(logDir);
+            File.AppendAllText(
+                Path.Combine(logDir, "crash.log"),
+                $"[{DateTime.Now:HH:mm:ss}] {e.Message}{Environment.NewLine}{e.Exception}{Environment.NewLine}{Environment.NewLine}");
+        }
+        catch
+        {
+        }
+        e.Handled = true;
     }
 
     /// <summary>

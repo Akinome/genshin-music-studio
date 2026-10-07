@@ -2,6 +2,7 @@ using GenshinMusicStudio_WinUI.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using Path = System.IO.Path;
@@ -22,11 +23,15 @@ public sealed partial class PlayerPage : Page
     private double lastUiUpdate;
     private double lastHighlight;
     private TranslateTransform? waterfallTransform;
+    private DispatcherQueueTimer? renderTimer;
 
     public PlayerPage()
     {
         InitializeComponent();
         BoostSlider.Minimum = 100;
+        renderTimer = DispatcherQueue.CreateTimer();
+        renderTimer.Interval = TimeSpan.FromMilliseconds(16);
+        renderTimer.Tick += (_, _) => OnFrame();
         waterfallTransform = new TranslateTransform();
         RollCanvas.RenderTransform = waterfallTransform;
         RollViewport.SizeChanged += (_, args) =>
@@ -61,7 +66,7 @@ public sealed partial class PlayerPage : Page
 
     private void PlayerPage_Unloaded(object sender, RoutedEventArgs e)
     {
-        Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnRendering;
+        renderTimer?.Stop();
         App.Player.PlayingChanged -= Player_PlayingChanged;
         App.Player.ProgressChanged -= Player_ProgressChanged;
     }
@@ -100,7 +105,7 @@ public sealed partial class PlayerPage : Page
         }
         renderBase = 0;
         App.Player.Play(new[] { path });
-        Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += OnRendering;
+        renderTimer?.Start();
     }
 
     private void Stop_Click(object sender, RoutedEventArgs e) => App.Player.Stop();
@@ -132,7 +137,7 @@ public sealed partial class PlayerPage : Page
             UpdateControls();
             if (!playing)
             {
-                Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnRendering;
+                renderTimer?.Stop();
                 renderBase = 0;
                 RenderNotesWindow(0);
                 if (waterfallTransform is not null) waterfallTransform.Y = 0;
@@ -149,7 +154,7 @@ public sealed partial class PlayerPage : Page
         });
     }
 
-    private void OnRendering(object sender, object args)
+    private void OnFrame()
     {
         if (!App.Player.IsPlaying) return;
         var position = App.Player.CurrentPosition;

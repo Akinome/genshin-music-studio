@@ -115,14 +115,14 @@ public sealed partial class PlayerPage : Page
 
     private static readonly Dictionary<string, string> InstrumentNames = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["Lyre"] = "风物之诗琴",
-        ["Zither"] = "琴",
-        ["Old-Zither"] = "旧式琴",
-        ["Vintage-Lyre"] = "复古琴",
-        ["HarmonicKey"] = "和声键琴",
-        ["LeapingSpiritPiano"] = "跃动灵琴",
-        ["LingeringEuphonia"] = "余音琴",
-        ["Ukulele"] = "尤克里里",
+        ["Lyre"] = "风物之诗琴 Lyre",
+        ["Zither"] = "琴 Zither",
+        ["Old-Zither"] = "旧式琴 Old Zither",
+        ["Vintage-Lyre"] = "复古琴 Vintage Lyre",
+        ["HarmonicKey"] = "和声键琴 Harmonic Keys",
+        ["LeapingSpiritPiano"] = "跃动灵琴 Leaping Spirit Piano",
+        ["LingeringEuphonia"] = "余音琴 Lingering Euphonia",
+        ["Ukulele"] = "尤克里里 Ukulele",
     };
 
     private void LoadAudioOptions()
@@ -133,7 +133,8 @@ public sealed partial class PlayerPage : Page
         var instrumentsDir = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "Instruments");
         if (Directory.Exists(instrumentsDir))
         {
-            foreach (var folder in Directory.EnumerateDirectories(instrumentsDir).OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+            foreach (var folder in Directory.EnumerateDirectories(instrumentsDir)
+                .OrderBy(p => InstrumentNames.TryGetValue(System.IO.Path.GetFileName(p), out var mapped) ? mapped : System.IO.Path.GetFileName(p), StringComparer.CurrentCulture))
             {
                 var name = System.IO.Path.GetFileName(folder);
                 var display = InstrumentNames.TryGetValue(name, out var mapped) ? mapped : name;

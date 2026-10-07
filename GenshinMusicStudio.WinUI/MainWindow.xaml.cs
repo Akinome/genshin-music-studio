@@ -37,6 +37,7 @@ public sealed partial class MainWindow : Window
         App.Player.ProgressChanged += Player_ProgressChanged;
         App.Player.PlayingChanged += Player_PlayingChanged;
         App.Player.Volume = AppSettings.Load().Volume ?? 0.9;
+        App.Player.VelocityBoost = AppSettings.Load().VelocityBoost ?? 1.5;
         Closed += (_, _) => App.Player.Stop();
         NavFrame.Navigate(typeof(DownloadPage));
     }

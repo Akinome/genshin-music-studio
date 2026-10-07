@@ -36,6 +36,7 @@ public sealed class MidiPlayer : IDisposable
     private bool opened;
     private IReadOnlyList<string> playlist = Array.Empty<string>();
     private double volume = 0.9;
+    private double velocityBoost = 1.5;
     private List<(double Start, double Duration)> fileRanges = new();
 
     public event Action<bool>? PlayingChanged;
@@ -52,6 +53,12 @@ public sealed class MidiPlayer : IDisposable
             volume = Math.Clamp(value, 0.0, 1.0);
             ApplyVolume();
         }
+    }
+
+    public double VelocityBoost
+    {
+        get => velocityBoost;
+        set => velocityBoost = Math.Clamp(value, 0.5, 4.0);
     }
 
     private void ApplyVolume()
@@ -154,7 +161,7 @@ public sealed class MidiPlayer : IDisposable
                     lastReport = evt.Time;
                     ReportProgress(evt.Time, total);
                 }
-                midiOutShortMsg(handle, evt.Message);
+                midiOutShortMsg(handle, ScaleVelocity(evt.Message, velocityBoost));
             }
 
             var tail = total + 0.8 - clock.Elapsed.TotalSeconds;
@@ -230,6 +237,14 @@ public sealed class MidiPlayer : IDisposable
             return 0x90 | (note << 8) | (velocity << 16);
         }
         return 0x80 | (note << 8);
+    }
+
+    private static int ScaleVelocity(int message, double boost)
+    {
+        if ((message & 0xF0) != 0x90 || boost <= 1.0) return message;
+        var velocity = (message >> 16) & 0x7F;
+        var scaled = (int)Math.Min(127, Math.Max(1, Math.Round(velocity * boost)));
+        return (message & 0xFE00FF) | (scaled << 16);
     }
 
     private static (List<(double Time, bool IsOn, int Pitch, int Velocity)> Events, double Duration) ParseMidiFile(string path)

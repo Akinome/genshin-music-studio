@@ -37,6 +37,10 @@ public sealed partial class PlayerPage : Page
         VolumeSlider.Value = App.Player.Volume * 100;
         VolumeText.Text = (int)Math.Round(App.Player.Volume * 100) + "%";
         VolumeSlider.ValueChanged += VolumeSlider_ValueChanged;
+        BoostSlider.ValueChanged -= BoostSlider_ValueChanged;
+        BoostSlider.Value = App.Player.VelocityBoost * 100;
+        BoostText.Text = (int)Math.Round(App.Player.VelocityBoost * 100) + "%";
+        BoostSlider.ValueChanged += BoostSlider_ValueChanged;
         if (FilePathBox.Text.Length > 0)
         {
             RenderRoll(FilePathBox.Text);
@@ -94,6 +98,16 @@ public sealed partial class PlayerPage : Page
         VolumeText.Text = (int)Math.Round(volume * 100) + "%";
         var settings = AppSettings.Load();
         settings.Volume = volume;
+        AppSettings.Save(settings);
+    }
+
+    private void BoostSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    {
+        var boost = e.NewValue / 100.0;
+        App.Player.VelocityBoost = boost;
+        BoostText.Text = (int)Math.Round(boost * 100) + "%";
+        var settings = AppSettings.Load();
+        settings.VelocityBoost = boost;
         AppSettings.Save(settings);
     }
 

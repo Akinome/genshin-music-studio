@@ -26,6 +26,15 @@ public static class Key21Layout
         return octave * 7 + degree;
     }
 
+    public static int ButtonNumberForPitch(int pitch)
+    {
+        pitch = FoldPitch(pitch);
+        var mapped = ChromaticToDiatonic[pitch % 12];
+        var degree = SemitoneToDegree[mapped];
+        var octave = Math.Clamp((pitch - LowPitch) / 12, 0, 2);
+        return (2 - octave) * 7 + degree;
+    }
+
     public static (int Row, int Column) KeyPosition(int keyIndex)
     {
         var octave = keyIndex / 7;

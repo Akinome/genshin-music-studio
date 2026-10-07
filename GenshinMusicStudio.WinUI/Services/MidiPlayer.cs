@@ -177,7 +177,7 @@ public sealed class MidiPlayer : IDisposable
                 {
                     if (Instrument is not null)
                     {
-                        Instrument.PlayKey(Key21Layout.KeyIndexForPitch(evt.Pitch), Math.Clamp(velocityBoost, 0.1, 1.0));
+                        Instrument.PlayKey(Key21Layout.ButtonNumberForPitch(evt.Pitch), Math.Clamp(velocityBoost, 0.1, 1.0));
                     }
                     else
                     {

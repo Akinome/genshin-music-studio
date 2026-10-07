@@ -21,10 +21,17 @@
             </Border>
 
             <Border Padding="16" CornerRadius="12" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
-                <Grid x:Name="RollViewport" Height="420">
-                    <Canvas x:Name="RollCanvas" VerticalAlignment="Bottom" />
-                    <Rectangle x:Name="HitLine" Height="3" VerticalAlignment="Bottom"
-                               Fill="Orange" IsHitTestVisible="False" />
+                <Grid RowSpacing="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="420" />
+                    </Grid.RowDefinitions>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="谱面" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <ToggleButton x:Name="WaterfallModeButton" Content="瀑布流" IsChecked="True" Click="WaterfallMode_Click" />
+                        <ToggleButton x:Name="KeyboardModeButton" Content="21键键盘" Click="KeyboardMode_Click" />
+                    </StackPanel>
+                    <Grid x:Name="RollViewport" Grid.Row="1" />
                 </Grid>
             </Border>
 

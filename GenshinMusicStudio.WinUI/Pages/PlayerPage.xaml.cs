@@ -22,8 +22,10 @@ public sealed partial class PlayerPage : Page
     private double renderBase;
     private double lastUiUpdate;
     private double lastHighlight;
-    private TranslateTransform? waterfallTransform;
     private DispatcherQueueTimer? renderTimer;
+    private IMidiVisualization? visualization;
+    private readonly WaterfallVisualization waterfallMode = new();
+    private readonly KeyboardVisualization keyboardMode = new();
 
     public PlayerPage()
     {
@@ -32,8 +34,6 @@ public sealed partial class PlayerPage : Page
         renderTimer = DispatcherQueue.CreateTimer();
         renderTimer.Interval = TimeSpan.FromMilliseconds(16);
         renderTimer.Tick += (_, _) => OnFrame();
-        waterfallTransform = new TranslateTransform();
-        RollCanvas.RenderTransform = waterfallTransform;
         RollViewport.SizeChanged += (_, args) =>
         {
             RollViewport.Clip = new RectangleGeometry
@@ -61,6 +61,7 @@ public sealed partial class PlayerPage : Page
         {
             RenderRoll(FilePathBox.Text);
         }
+        SetMode(waterfallMode);
         UpdateControls();
     }
 
@@ -103,8 +104,9 @@ public sealed partial class PlayerPage : Page
         {
             RenderRoll(path);
         }
-        renderBase = 0;
         App.Player.Play(new[] { path });
+        if (visualization is null) SetMode(waterfallMode);
+        else visualization.Reset();
         renderTimer?.Start();
     }
 
@@ -138,9 +140,7 @@ public sealed partial class PlayerPage : Page
             if (!playing && !App.Player.IsPlaying)
             {
                 renderTimer?.Stop();
-                renderBase = 0;
-                RenderNotesWindow(0);
-                if (waterfallTransform is not null) waterfallTransform.Y = 0;
+                visualization?.Reset();
             }
         });
     }
@@ -156,17 +156,9 @@ public sealed partial class PlayerPage : Page
 
     private void OnFrame()
     {
-        if (!App.Player.IsPlaying) return;
         var position = App.Player.CurrentPosition;
-        if (position - renderBase >= RespawnInterval)
-        {
-            renderBase = Math.Floor(position / RespawnInterval) * RespawnInterval;
-            RenderNotesWindow(renderBase);
-        }
-        if (waterfallTransform is not null)
-        {
-            waterfallTransform.Y = (position - renderBase) * PixelsPerSecond;
-        }
+        if (!App.Player.IsPlaying) return;
+        visualization?.Update(position);
         if (position - lastUiUpdate >= 0.25)
         {
             lastUiUpdate = position;
@@ -175,11 +167,6 @@ public sealed partial class PlayerPage : Page
                 TimeText.Text = FormatTime(position) + " / " + FormatTime(duration);
                 PlayProgress.Value = duration > 0 ? Math.Clamp(position / duration * 100, 0, 100) : 0;
             });
-        }
-        if (position - lastHighlight >= 0.25)
-        {
-            lastHighlight = position;
-            HighlightPlayingNotes(position);
         }
     }
 
@@ -207,77 +194,27 @@ public sealed partial class PlayerPage : Page
             _ = ShowMessageAsync("没有音符", "该 MIDI 文件中没有识别到音符。");
             return;
         }
-        renderBase = 0;
-        RenderNotesWindow(0);
+        if (visualization is null) SetMode(waterfallMode);
+        else visualization.Initialize(RollViewport, notes, duration);
         TimeText.Text = "0:00 / " + FormatTime(duration);
     }
 
-    private void RenderNotesWindow(double baseTime)
+    private void SetMode(IMidiVisualization mode)
     {
-        if (waterfallTransform is null) return;
-        var range = (int)(maxPitch - minPitch);
-        if (range < 35) range = 35;
-        var viewportWidth = RollViewport.ActualWidth;
-        if (double.IsNaN(viewportWidth) || viewportWidth < 100) viewportWidth = 1100;
-        var keyWidth = Math.Clamp(viewportWidth / (range + 1), 10, 26);
-        var viewportHeight = RollViewport.ActualHeight;
-        if (double.IsNaN(viewportHeight) || viewportHeight < 100) viewportHeight = 420;
-        var windowSeconds = viewportHeight / PixelsPerSecond + 1.5;
-        var canvasHeight = windowSeconds * PixelsPerSecond;
-        var canvasWidth = (range + 1) * keyWidth;
-        RollCanvas.Width = canvasWidth;
-        RollCanvas.Height = canvasHeight;
-        RollCanvas.Children.Clear();
-
-        var laneBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(30, 128, 128, 128));
-        var cLineBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(60, 128, 128, 128));
-        for (var pitch = (int)minPitch; pitch <= (int)maxPitch; pitch++)
+        visualization = mode;
+        WaterfallModeButton.IsChecked = mode == waterfallMode;
+        KeyboardModeButton.IsChecked = mode == keyboardMode;
+        if (notes.Count == 0)
         {
-            var line = new Rectangle
-            {
-                Width = 1,
-                Height = canvasHeight,
-                Fill = pitch % 12 == 0 ? cLineBrush : laneBrush,
-            };
-            Canvas.SetLeft(line, (pitch - minPitch) * keyWidth + keyWidth - 1);
-            Canvas.SetTop(line, 0);
-            RollCanvas.Children.Add(line);
+            RollViewport.Children.Clear();
+            return;
         }
-
-        var noteBrush = (Brush)Application.Current.Resources["AccentBlueBrush"];
-        var halfViewport = viewportHeight;
-        foreach (var note in notes)
-        {
-            if (note.End < baseTime - 0.1) continue;
-            if (note.Start > baseTime + windowSeconds) continue;
-            var top = canvasHeight - (note.End - baseTime) * PixelsPerSecond;
-            if (top < -halfViewport || top > canvasHeight) continue;
-            var rect = new Rectangle
-            {
-                Width = Math.Max(4, keyWidth - 3),
-                Height = Math.Max(6, (note.End - note.Start) * PixelsPerSecond),
-                RadiusX = 3,
-                RadiusY = 3,
-                Fill = noteBrush,
-                Opacity = 0.88,
-                Tag = note,
-            };
-            Canvas.SetLeft(rect, (note.Pitch - minPitch) * keyWidth + 1.5);
-            Canvas.SetTop(rect, top);
-            RollCanvas.Children.Add(rect);
-        }
+        mode.Initialize(RollViewport, notes, duration);
     }
 
-    private void HighlightPlayingNotes(double position)
-    {
-        var normal = (Brush)Application.Current.Resources["AccentBlueBrush"];
-        var active = new SolidColorBrush(Microsoft.UI.Colors.White);
-        foreach (var child in RollCanvas.Children.OfType<Rectangle>())
-        {
-            if (child.Tag is not MidiPlayer.MidiNote note) continue;
-            child.Fill = position >= note.Start - 0.02 && position <= note.End ? active : normal;
-        }
-    }
+    private void WaterfallMode_Click(object sender, RoutedEventArgs e) => SetMode(waterfallMode);
+
+    private void KeyboardMode_Click(object sender, RoutedEventArgs e) => SetMode(keyboardMode);
 
     private static string FormatTime(double seconds)
     {

@@ -24,6 +24,7 @@ public sealed class KeyboardVisualization : IMidiVisualization
     private Canvas? keyCanvas;
     private Grid? viewport;
     private double lastHighlight;
+    private double lastPosition;
     private readonly Dictionary<int, List<MidiPlayer.MidiNote>> keyNotes = new();
     private readonly HashSet<int> litKeys = new();
     private readonly List<(int KeyIndex, double Start)> pulses = new();
@@ -219,7 +220,9 @@ public sealed class KeyboardVisualization : IMidiVisualization
 
     private void Highlight(double position)
     {
+        var previous = lastPosition;
         var next = new HashSet<int>();
+        var newlyOnset = new HashSet<int>();
         foreach (var pair in keyNotes)
         {
             foreach (var note in pair.Value)
@@ -227,15 +230,27 @@ public sealed class KeyboardVisualization : IMidiVisualization
                 if (position >= note.Start - 0.02 && position <= note.End)
                 {
                     next.Add(pair.Key);
+                    if (note.Start > previous && note.Start <= position + 0.02)
+                    {
+                        newlyOnset.Add(pair.Key);
+                    }
                     break;
                 }
             }
         }
         foreach (var keyIndex in next)
         {
-            if (litKeys.Contains(keyIndex)) continue;
-            PressKey(keyIndex);
-            pulses.Add((keyIndex, position));
+            if (newlyOnset.Contains(keyIndex))
+            {
+                pulses.RemoveAll(p => p.KeyIndex == keyIndex);
+                PressKey(keyIndex);
+                pulses.Add((keyIndex, position));
+            }
+            else if (!litKeys.Contains(keyIndex))
+            {
+                PressKey(keyIndex);
+                pulses.Add((keyIndex, position));
+            }
         }
         foreach (var keyIndex in litKeys)
         {
@@ -244,6 +259,7 @@ public sealed class KeyboardVisualization : IMidiVisualization
         }
         litKeys.Clear();
         foreach (var keyIndex in next) litKeys.Add(keyIndex);
+        lastPosition = position;
     }
 
     private void PressKey(int keyIndex)

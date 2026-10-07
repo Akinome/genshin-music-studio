@@ -24,6 +24,8 @@ public sealed class MidiPlayer : IDisposable
         public int Message;
     }
 
+    public sealed record MidiNote(double Start, double End, int Pitch, int Velocity);
+
     private readonly object gate = new();
     private Thread? thread;
     private volatile bool stopRequested;
@@ -37,6 +39,38 @@ public sealed class MidiPlayer : IDisposable
 
     public bool IsPlaying => thread is { IsAlive: true } && !stopRequested;
     public string? PlayingFolder { get; private set; }
+
+    public static (List<MidiNote> Notes, double Duration) ParseNotes(string path)
+    {
+        var (events, duration) = ParseMidiFile(path);
+        var notes = new List<MidiNote>();
+        var active = new Dictionary<int, double>();
+        foreach (var (time, isOn, pitch, velocity) in events)
+        {
+            if (isOn)
+            {
+                if (active.TryGetValue(pitch, out var previousStart))
+                {
+                    notes.Add(new MidiNote(previousStart, time, pitch, 80));
+                }
+                active[pitch] = time;
+            }
+            else if (active.TryGetValue(pitch, out var start))
+            {
+                active.Remove(pitch);
+                if (time - start > 0.001)
+                {
+                    notes.Add(new MidiNote(start, time, pitch, Math.Max(40, velocity)));
+                }
+            }
+        }
+        foreach (var pair in active)
+        {
+            notes.Add(new MidiNote(pair.Value, Math.Max(duration, pair.Value + 0.2), pair.Key, 80));
+        }
+        notes.Sort((a, b) => a.Start.CompareTo(b.Start));
+        return (notes, duration);
+    }
 
     public void Play(IReadOnlyList<string> files, string? folder = null)
     {
@@ -144,8 +178,9 @@ public sealed class MidiPlayer : IDisposable
         {
             var (fileEvents, duration) = ParseMidiFile(file);
             ranges.Add((offset, duration));
-            foreach (var (time, message) in fileEvents)
+            foreach (var (time, isOn, pitch, velocity) in fileEvents)
             {
+                var message = isOn ? 0x90 | pitch | (velocity << 8) : 0x80 | pitch;
                 events.Add(new MidiEvent { Time = offset + time, Message = FoldMessage(message) });
             }
             offset += duration + 0.6;
@@ -164,9 +199,9 @@ public sealed class MidiPlayer : IDisposable
         return (message & 0xFF00FF) | (note << 8);
     }
 
-    private static (List<(double Time, int Message)> Events, double Duration) ParseMidiFile(string path)
+    private static (List<(double Time, bool IsOn, int Pitch, int Velocity)> Events, double Duration) ParseMidiFile(string path)
     {
-        var events = new List<(double Time, int Message)>();
+        var events = new List<(double Time, bool IsOn, int Pitch, int Velocity)>();
         var bytes = File.ReadAllBytes(path);
         if (bytes.Length < 14 || bytes[0] != 'M' || bytes[1] != 'T' || bytes[2] != 'h' || bytes[3] != 'd')
         {
@@ -235,11 +270,11 @@ public sealed class MidiPlayer : IDisposable
                     position += 2;
                     if (kind == 0x90 && velocity > 0)
                     {
-                        events.Add((TicksToSeconds(tick, ticksPerBeat, tempo), 0x90 | note | (velocity << 8)));
+                        events.Add((TicksToSeconds(tick, ticksPerBeat, tempo), true, note, velocity));
                     }
                     else
                     {
-                        events.Add((TicksToSeconds(tick, ticksPerBeat, tempo), 0x80 | note));
+                        events.Add((TicksToSeconds(tick, ticksPerBeat, tempo), false, note, 0));
                     }
                 }
                 else if (kind is 0xC0 or 0xD0)

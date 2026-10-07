@@ -130,6 +130,9 @@ public sealed partial class MainWindow : Window
             case "local":
                 NavFrame.Navigate(typeof(LocalPage));
                 break;
+            case "player":
+                NavFrame.Navigate(typeof(PlayerPage));
+                break;
             case "environment":
                 NavFrame.Navigate(typeof(EnvironmentPage));
                 break;

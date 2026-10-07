@@ -10,7 +10,7 @@ namespace GenshinMusicStudio_WinUI.Services;
 public sealed class KeyboardVisualization : IMidiVisualization
 {
     private const double HighlightInterval = 0.05;
-    private const double PixelsPerSecond = 120;
+    private const double ApproachSeconds = 1.0;
 
     // genshin.music palette: #fff9ef / #eae5ce keys in light, #495466 in dark.
     private static readonly Windows.UI.Color KeyFillLight = Windows.UI.Color.FromArgb(255, 255, 249, 239);
@@ -26,10 +26,6 @@ public sealed class KeyboardVisualization : IMidiVisualization
     private Grid? viewport;
     private double lastHighlight;
     private double lastPosition;
-    private Canvas? fallCanvas;
-    private TranslateTransform? transform;
-    private double renderBase;
-    private double keyboardHeight = 150;
     private readonly Dictionary<int, List<MidiPlayer.MidiNote>> keyNotes = new();
     private readonly HashSet<int> litKeys = new();
     private double keyWidth = 70;
@@ -56,43 +52,18 @@ public sealed class KeyboardVisualization : IMidiVisualization
         }
 
         owner.Children.Clear();
-        fallCanvas = new Canvas();
-        transform = new TranslateTransform();
-        fallCanvas.RenderTransform = transform;
-        owner.Children.Add(fallCanvas);
-
         keyCanvas = new Canvas
         {
-            VerticalAlignment = VerticalAlignment.Bottom,
-            Margin = new Thickness(0, 0, 0, 10),
+            VerticalAlignment = VerticalAlignment.Center,
         };
         owner.Children.Add(keyCanvas);
         BuildKeyboard();
-        var hitLine = new Rectangle
-        {
-            Height = 2,
-            VerticalAlignment = VerticalAlignment.Bottom,
-            Margin = new Thickness(0, 0, 0, keyCanvas.Height + 12),
-            Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(90, 218, 165, 82)),
-            IsHitTestVisible = false,
-        };
-        owner.Children.Add(hitLine);
         lastHighlight = -1;
-        renderBase = 0;
-        RenderFallWindow(0);
     }
 
     public void Update(double position)
     {
-        if (fallCanvas is not null && transform is not null)
-        {
-            if (position - renderBase >= 0.5)
-            {
-                renderBase = Math.Floor(position / 0.5) * 0.5;
-                RenderFallWindow(renderBase);
-            }
-            transform.Y = (position - renderBase) * PixelsPerSecond;
-        }
+        UpdateApproach(position);
         if (position - lastHighlight >= HighlightInterval)
         {
             lastHighlight = position;
@@ -102,68 +73,9 @@ public sealed class KeyboardVisualization : IMidiVisualization
 
     public void Reset()
     {
-        renderBase = 0;
-        if (transform is not null) transform.Y = 0;
-        RenderFallWindow(0);
         lastHighlight = -1;
         ClearLitKeys();
-    }
-
-    private void RenderFallWindow(double baseTime)
-    {
-        if (fallCanvas is null || viewport is null || transform is null) return;
-        var viewportWidth = SafeWidth();
-        var fallHeight = SafeHeight() - keyCanvas.Height - 14;
-        if (fallHeight < 60) fallHeight = 60;
-        var windowSeconds = fallHeight / PixelsPerSecond + 1.5;
-        var canvasHeight = windowSeconds * PixelsPerSecond;
-        var keyboardWidth = keyWidth * 7;
-        var fallWidth = Math.Max(keyboardWidth, viewportWidth);
-        var offsetX = (fallWidth - keyboardWidth) / 2;
-        fallCanvas.Width = fallWidth;
-        fallCanvas.Height = canvasHeight;
-        fallCanvas.Children.Clear();
-
-        var laneBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(20, 128, 128, 128));
-        for (var degree = 0; degree < 7; degree++)
-        {
-            var line = new Rectangle
-            {
-                Width = 1,
-                Height = canvasHeight,
-                Fill = laneBrush,
-            };
-            Canvas.SetLeft(line, offsetX + degree * keyWidth + keyWidth / 2);
-            Canvas.SetTop(line, 0);
-            fallCanvas.Children.Add(line);
-        }
-
-        var noteFill = IsDarkTheme
-            ? new SolidColorBrush(Windows.UI.Color.FromArgb(255, 73, 84, 102))
-            : new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 249, 239));
-        foreach (var note in notes)
-        {
-            if (note.End < baseTime - 0.1) continue;
-            if (note.Start > baseTime + windowSeconds) continue;
-            var top = canvasHeight - (note.End - baseTime) * PixelsPerSecond;
-            if (top < -fallHeight || top > canvasHeight) continue;
-            var degree = Key21Layout.KeyIndexForPitch(note.Pitch) % 7;
-            var rect = new Rectangle
-            {
-                Width = Math.Max(6, keyWidth - 18),
-                Height = Math.Max(6, (note.End - note.Start) * PixelsPerSecond),
-                RadiusX = 6,
-                RadiusY = 6,
-                Fill = noteFill,
-                Opacity = 0.92,
-                Tag = note,
-                Stroke = new SolidColorBrush(Windows.UI.Color.FromArgb(60, 128, 128, 128)),
-                StrokeThickness = 1,
-            };
-            Canvas.SetLeft(rect, offsetX + degree * keyWidth + (keyWidth - rect.Width) / 2);
-            Canvas.SetTop(rect, top);
-            fallCanvas.Children.Add(rect);
-        }
+        HideAllRings();
     }
 
     private void BuildKeyboard()
@@ -185,6 +97,27 @@ public sealed class KeyboardVisualization : IMidiVisualization
             var centerX = column * keyWidth + keyWidth / 2;
             var centerY = row * rowHeight + rowHeight / 2 + 7;
             var diameter = Math.Min(keyWidth - 12, rowHeight - 10);
+
+            var ring = new Ellipse
+            {
+                Width = diameter,
+                Height = diameter,
+                Stroke = RingBrushForRow(row),
+                StrokeThickness = 3,
+                Opacity = 0,
+                IsHitTestVisible = false,
+                Tag = 4000 + keyIndex,
+                RenderTransform = new ScaleTransform
+                {
+                    ScaleX = 2.3,
+                    ScaleY = 2.3,
+                    CenterX = diameter / 2,
+                    CenterY = diameter / 2,
+                },
+            };
+            Canvas.SetLeft(ring, centerX - diameter / 2);
+            Canvas.SetTop(ring, centerY - diameter / 2);
+            keyCanvas.Children.Add(ring);
 
             var circle = new Ellipse
             {
@@ -221,6 +154,74 @@ public sealed class KeyboardVisualization : IMidiVisualization
         }
     }
 
+    private Brush RingBrushForRow(int row)
+    {
+        // genshin.music approach circles: outer rows use the accent, the middle row its complement.
+        if (row == 1)
+        {
+            return new SolidColorBrush(Windows.UI.Color.FromArgb(255, 232, 163, 61));
+        }
+        return (Brush)Application.Current.Resources["AccentBlueBrush"];
+    }
+
+    private void UpdateApproach(double position)
+    {
+        if (keyCanvas is null) return;
+        foreach (var pair in keyNotes)
+        {
+            double? nextStart = null;
+            foreach (var note in pair.Value)
+            {
+                if (note.Start >= position - 0.02 && (nextStart is null || note.Start < nextStart))
+                {
+                    nextStart = note.Start;
+                }
+            }
+            var keyIndex = pair.Key;
+            if (nextStart is double start && start - position <= ApproachSeconds && position < start)
+            {
+                var progress = 1.0 - (start - position) / ApproachSeconds;
+                var scale = 2.3 - 1.5 * progress;
+                var opacity = progress < 0.5 ? progress * 0.6 : 0.3 + (progress - 0.5) * 1.0;
+                SetRing(keyIndex, scale, Math.Clamp(opacity, 0, 0.8));
+            }
+            else
+            {
+                SetRing(keyIndex, 2.3, 0);
+            }
+        }
+    }
+
+    private void SetRing(int keyIndex, double scale, double opacity)
+    {
+        if (keyCanvas is null) return;
+        foreach (var child in keyCanvas.Children.OfType<Ellipse>())
+        {
+            if (child.Tag is int index && index == 4000 + keyIndex)
+            {
+                child.Opacity = opacity;
+                if (child.RenderTransform is ScaleTransform transform)
+                {
+                    transform.ScaleX = scale;
+                    transform.ScaleY = scale;
+                }
+                return;
+            }
+        }
+    }
+
+    private void HideAllRings()
+    {
+        if (keyCanvas is null) return;
+        foreach (var child in keyCanvas.Children.OfType<Ellipse>())
+        {
+            if (child.Tag is int index && index >= 4000)
+            {
+                child.Opacity = 0;
+            }
+        }
+    }
+
     private (Brush Fill, Brush Border, Brush Text) ThemeKeys()
     {
         return IsDarkTheme
@@ -250,11 +251,7 @@ public sealed class KeyboardVisualization : IMidiVisualization
         }
         foreach (var keyIndex in next)
         {
-            if (newlyOnset.Contains(keyIndex))
-            {
-                PressKey(keyIndex);
-            }
-            else if (!litKeys.Contains(keyIndex))
+            if (newlyOnset.Contains(keyIndex) || !litKeys.Contains(keyIndex))
             {
                 PressKey(keyIndex);
             }

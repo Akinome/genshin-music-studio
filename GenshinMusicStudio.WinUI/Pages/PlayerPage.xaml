@@ -58,6 +58,8 @@
                         <TextBlock Text="音量" VerticalAlignment="Center" />
                         <Slider x:Name="VolumeSlider" Width="200" Minimum="0" Maximum="100" ValueChanged="VolumeSlider_ValueChanged" />
                         <TextBlock x:Name="VolumeText" Text="90%" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Text="音频" VerticalAlignment="Center" Margin="16,0,0,0" />
+                        <ComboBox x:Name="AudioBox" Width="170" SelectionChanged="AudioBox_SelectionChanged" />
                         <TextBlock Text="音符力度" VerticalAlignment="Center" Margin="16,0,0,0" />
                         <Slider x:Name="BoostSlider" Width="200" Maximum="300" ValueChanged="BoostSlider_ValueChanged" />
                         <TextBlock x:Name="BoostText" Text="150%" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />

@@ -49,6 +49,7 @@ public sealed partial class PlayerPage : Page
     {
         App.Player.PlayingChanged += Player_PlayingChanged;
         App.Player.ProgressChanged += Player_ProgressChanged;
+        LoadAudioOptions();
         VolumeSlider.ValueChanged -= VolumeSlider_ValueChanged;
         VolumeSlider.Value = App.Player.Volume * 100;
         VolumeText.Text = (int)Math.Round(App.Player.Volume * 100) + "%";
@@ -112,10 +113,69 @@ public sealed partial class PlayerPage : Page
 
     private void Stop_Click(object sender, RoutedEventArgs e) => App.Player.Stop();
 
+    private static readonly Dictionary<string, string> InstrumentNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Lyre"] = "风物之诗琴",
+        ["Zither"] = "琴",
+        ["Old-Zither"] = "旧式琴",
+        ["Vintage-Lyre"] = "复古琴",
+        ["HarmonicKey"] = "和声键琴",
+        ["LeapingSpiritPiano"] = "跃动灵琴",
+        ["LingeringEuphonia"] = "余音琴",
+        ["Ukulele"] = "尤克里里",
+    };
+
+    private void LoadAudioOptions()
+    {
+        AudioBox.SelectionChanged -= AudioBox_SelectionChanged;
+        AudioBox.Items.Clear();
+        AudioBox.Items.Add(new ComboBoxItem { Content = "Windows 合成器", Tag = "" });
+        var instrumentsDir = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "Instruments");
+        if (Directory.Exists(instrumentsDir))
+        {
+            foreach (var folder in Directory.EnumerateDirectories(instrumentsDir).OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+            {
+                var name = System.IO.Path.GetFileName(folder);
+                var display = InstrumentNames.TryGetValue(name, out var mapped) ? mapped : name;
+                AudioBox.Items.Add(new ComboBoxItem { Content = display, Tag = folder });
+            }
+        }
+        AudioBox.SelectedIndex = 0;
+        AudioBox.SelectionChanged += AudioBox_SelectionChanged;
+    }
+
+    private async void AudioBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (AudioBox.SelectedItem is not ComboBoxItem item) return;
+        var folder = item.Tag?.ToString() ?? string.Empty;
+        if (folder.Length == 0)
+        {
+            App.Player.Instrument = null;
+            return;
+        }
+        PlayButton.IsEnabled = false;
+        try
+        {
+            await Task.Run(() => App.Instruments.LoadInstrument(folder));
+            App.Player.Instrument = App.Instruments;
+            App.Instruments.SetDeviceVolume(App.Player.Volume);
+        }
+        catch (Exception ex)
+        {
+            App.Player.Instrument = null;
+            _ = ShowMessageAsync("乐器加载失败", ex.Message);
+        }
+        finally
+        {
+            PlayButton.IsEnabled = true;
+        }
+    }
+
     private void VolumeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
     {
         var volume = e.NewValue / 100.0;
         App.Player.Volume = volume;
+        App.Instruments.SetDeviceVolume(volume);
         VolumeText.Text = (int)Math.Round(volume * 100) + "%";
         var settings = AppSettings.Load();
         settings.Volume = volume;

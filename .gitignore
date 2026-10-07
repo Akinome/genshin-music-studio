@@ -56,6 +56,9 @@ release/
 *.onnx
 !GenshinMusicStudio.WinUI/Assets/Models/nmp.onnx
 
+# Genshin instrument samples (game audio, shipped like the reference projects)
+!GenshinMusicStudio.WinUI/Assets/Instruments/**/*.mp3
+
 # Local test MIDI and screenshots
 native_*.mid
 native_bird_*.mid

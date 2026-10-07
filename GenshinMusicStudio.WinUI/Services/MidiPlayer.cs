@@ -24,7 +24,9 @@ public sealed class MidiPlayer : IDisposable
     private sealed class MidiEvent
     {
         public double Time;
-        public int Message;
+        public bool IsOn;
+        public int Pitch;
+        public int Velocity;
     }
 
     public sealed record MidiNote(double Start, double End, int Pitch, int Velocity);
@@ -46,6 +48,8 @@ public sealed class MidiPlayer : IDisposable
 
     public bool IsPlaying => thread is { IsAlive: true } && !stopRequested;
     public string? PlayingFolder { get; private set; }
+
+    public InstrumentPlayer? Instrument { get; set; }
 
     public double CurrentPosition => playbackClock?.Elapsed.TotalSeconds ?? 0;
 
@@ -140,14 +144,17 @@ public sealed class MidiPlayer : IDisposable
     {
         try
         {
-            if (midiOutOpen(out handle, 0, IntPtr.Zero, IntPtr.Zero, 0) != 0)
+            if (Instrument is null)
             {
-                opened = false;
-                throw new InvalidOperationException("无法打开 Windows MIDI 合成器。");
+                if (midiOutOpen(out handle, 0, IntPtr.Zero, IntPtr.Zero, 0) != 0)
+                {
+                    opened = false;
+                    throw new InvalidOperationException("无法打开 Windows MIDI 合成器。");
+                }
+                opened = true;
+                midiOutShortMsg(handle, 0xC0 | HarpProgram);
+                ApplyVolume();
             }
-            opened = true;
-            midiOutShortMsg(handle, 0xC0 | HarpProgram);
-            ApplyVolume();
 
             fileRanges = new List<(double Start, double Duration)>();
             var events = BuildPlaylistEvents(playlist, fileRanges);
@@ -166,7 +173,21 @@ public sealed class MidiPlayer : IDisposable
                     lastReport = evt.Time;
                     ReportProgress(evt.Time, total);
                 }
-                midiOutShortMsg(handle, ScaleVelocity(evt.Message, velocityBoost));
+                if (evt.IsOn)
+                {
+                    if (Instrument is not null)
+                    {
+                        Instrument.PlayKey(Key21Layout.KeyIndexForPitch(evt.Pitch), Math.Clamp(velocityBoost, 0.1, 1.0));
+                    }
+                    else
+                    {
+                        midiOutShortMsg(handle, ScaleVelocity(0x90 | (Key21Layout.FoldPitch(evt.Pitch) << 8) | (evt.Velocity << 16), velocityBoost));
+                    }
+                }
+                else if (Instrument is null)
+                {
+                    midiOutShortMsg(handle, 0x80 | (Key21Layout.FoldPitch(evt.Pitch) << 8));
+                }
             }
 
             var tail = total + 0.8 - clock.Elapsed.TotalSeconds;
@@ -184,16 +205,19 @@ public sealed class MidiPlayer : IDisposable
         finally
         {
             playbackClock = null;
-            lock (gate)
+            if (Instrument is null)
             {
-                if (opened)
+                lock (gate)
                 {
-                    for (var note = 0; note < 128; note++)
+                    if (opened)
                     {
-                        midiOutShortMsg(handle, 0x80 | (note << 8));
+                        for (var note = 0; note < 128; note++)
+                        {
+                            midiOutShortMsg(handle, 0x80 | (note << 8));
+                        }
+                        midiOutClose(handle);
+                        opened = false;
                     }
-                    midiOutClose(handle);
-                    opened = false;
                 }
             }
             PlayingFolder = null;
@@ -225,8 +249,7 @@ public sealed class MidiPlayer : IDisposable
             ranges.Add((offset, duration));
             foreach (var (time, isOn, pitch, velocity) in fileEvents)
             {
-                var message = isOn ? 0x90 | (pitch << 8) | (velocity << 16) : 0x80 | (pitch << 8);
-                events.Add(new MidiEvent { Time = offset + time, Message = FoldMessage(message) });
+                events.Add(new MidiEvent { Time = offset + time, IsOn = isOn, Pitch = pitch, Velocity = velocity });
             }
             offset += duration + 0.6;
         }

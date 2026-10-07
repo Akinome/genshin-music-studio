@@ -1,6 +1,7 @@
 using GenshinMusicStudio_WinUI.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using Path = System.IO.Path;
@@ -32,6 +33,10 @@ public sealed partial class PlayerPage : Page
     {
         App.Player.PlayingChanged += Player_PlayingChanged;
         App.Player.ProgressChanged += Player_ProgressChanged;
+        VolumeSlider.ValueChanged -= VolumeSlider_ValueChanged;
+        VolumeSlider.Value = App.Player.Volume * 100;
+        VolumeText.Text = (int)Math.Round(App.Player.Volume * 100) + "%";
+        VolumeSlider.ValueChanged += VolumeSlider_ValueChanged;
         if (FilePathBox.Text.Length > 0)
         {
             RenderRoll(FilePathBox.Text);
@@ -81,6 +86,16 @@ public sealed partial class PlayerPage : Page
     }
 
     private void Stop_Click(object sender, RoutedEventArgs e) => App.Player.Stop();
+
+    private void VolumeSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    {
+        var volume = e.NewValue / 100.0;
+        App.Player.Volume = volume;
+        VolumeText.Text = (int)Math.Round(volume * 100) + "%";
+        var settings = AppSettings.Load();
+        settings.Volume = volume;
+        AppSettings.Save(settings);
+    }
 
     private void Player_PlayingChanged(bool playing)
     {

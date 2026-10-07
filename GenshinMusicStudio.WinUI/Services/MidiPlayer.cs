@@ -18,6 +18,9 @@ public sealed class MidiPlayer : IDisposable
     [DllImport("winmm.dll")]
     private static extern int midiOutShortMsg(IntPtr handle, int message);
 
+    [DllImport("winmm.dll")]
+    private static extern int midiOutSetVolume(IntPtr handle, uint volume);
+
     private sealed class MidiEvent
     {
         public double Time;
@@ -32,6 +35,7 @@ public sealed class MidiPlayer : IDisposable
     private IntPtr handle;
     private bool opened;
     private IReadOnlyList<string> playlist = Array.Empty<string>();
+    private double volume = 0.9;
     private List<(double Start, double Duration)> fileRanges = new();
 
     public event Action<bool>? PlayingChanged;
@@ -39,6 +43,29 @@ public sealed class MidiPlayer : IDisposable
 
     public bool IsPlaying => thread is { IsAlive: true } && !stopRequested;
     public string? PlayingFolder { get; private set; }
+
+    public double Volume
+    {
+        get => volume;
+        set
+        {
+            volume = Math.Clamp(value, 0.0, 1.0);
+            ApplyVolume();
+        }
+    }
+
+    private void ApplyVolume()
+    {
+        var level = (uint)Math.Round(volume * 0xFFFF);
+        var both = level | (level << 16);
+        lock (gate)
+        {
+            if (opened)
+            {
+                midiOutSetVolume(handle, both);
+            }
+        }
+    }
 
     public static (List<MidiNote> Notes, double Duration) ParseNotes(string path)
     {
@@ -109,6 +136,7 @@ public sealed class MidiPlayer : IDisposable
             }
             opened = true;
             midiOutShortMsg(handle, 0xC0 | HarpProgram);
+            ApplyVolume();
 
             fileRanges = new List<(double Start, double Duration)>();
             var events = BuildPlaylistEvents(playlist, fileRanges);

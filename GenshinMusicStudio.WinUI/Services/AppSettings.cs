@@ -9,6 +9,7 @@ public sealed class AppSettingsData
     [JsonPropertyName("backup_dir")] public string? BackupDir { get; set; }
     [JsonPropertyName("output_dir")] public string? OutputDir { get; set; }
     [JsonPropertyName("library_folders")] public List<LibraryFolderData>? LibraryFolders { get; set; }
+    [JsonPropertyName("volume")] public double? Volume { get; set; }
 }
 
 public sealed class LibraryFolderData

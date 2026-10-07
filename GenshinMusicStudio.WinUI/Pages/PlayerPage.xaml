@@ -45,6 +45,12 @@
                         <TextBlock x:Name="NowPlayingText" Text="" VerticalAlignment="Center" Margin="16,0,0,0" />
                     </StackPanel>
                     <ProgressBar x:Name="PlayProgress" Minimum="0" Maximum="100" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE767;" FontSize="16" VerticalAlignment="Center" />
+                        <TextBlock Text="音量" VerticalAlignment="Center" />
+                        <Slider x:Name="VolumeSlider" Width="200" Minimum="0" Maximum="100" ValueChanged="VolumeSlider_ValueChanged" />
+                        <TextBlock x:Name="VolumeText" Text="90%" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
                 </StackPanel>
             </Border>
         </StackPanel>

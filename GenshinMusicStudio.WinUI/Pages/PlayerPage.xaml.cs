@@ -30,7 +30,6 @@ public sealed partial class PlayerPage : Page
     public PlayerPage()
     {
         InitializeComponent();
-        BoostSlider.Minimum = 100;
         renderTimer = DispatcherQueue.CreateTimer();
         renderTimer.Interval = TimeSpan.FromMilliseconds(16);
         renderTimer.Tick += (_, _) => OnFrame();
@@ -55,6 +54,7 @@ public sealed partial class PlayerPage : Page
         VolumeText.Text = (int)Math.Round(App.Player.Volume * 100) + "%";
         VolumeSlider.ValueChanged += VolumeSlider_ValueChanged;
         BoostSlider.ValueChanged -= BoostSlider_ValueChanged;
+        BoostSlider.Minimum = 100;
         BoostSlider.Value = App.Player.VelocityBoost * 100;
         BoostText.Text = (int)Math.Round(App.Player.VelocityBoost * 100) + "%";
         BoostSlider.ValueChanged += BoostSlider_ValueChanged;

@@ -19,6 +19,12 @@ public sealed class LibraryFolderData
     [JsonPropertyName("path")] public string Path { get; set; } = string.Empty;
 }
 
+[JsonSerializable(typeof(AppSettingsData))]
+[JsonSerializable(typeof(LibraryFolderData))]
+internal sealed partial class AppSettingsJsonContext : JsonSerializerContext
+{
+}
+
 public static class AppSettings
 {
     private static readonly object Gate = new();
@@ -46,7 +52,7 @@ public static class AppSettings
                 if (File.Exists(SettingsPath))
                 {
                     var json = File.ReadAllText(SettingsPath);
-                    cached = JsonSerializer.Deserialize<AppSettingsData>(json) ?? new AppSettingsData();
+                    cached = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettingsData) ?? new AppSettingsData();
                 }
             }
             catch
@@ -62,8 +68,7 @@ public static class AppSettings
     {
         lock (Gate)
         {
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            File.WriteAllText(SettingsPath, JsonSerializer.Serialize(data, options));
+            File.WriteAllText(SettingsPath, JsonSerializer.Serialize(data, AppSettingsJsonContext.Default.AppSettingsData));
             cached = data;
         }
     }

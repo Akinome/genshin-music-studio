@@ -1,7 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Shapes;
 using Windows.Foundation;
 
@@ -10,14 +10,14 @@ namespace GenshinMusicStudio_WinUI.Services;
 public sealed class KeyboardVisualization : IMidiVisualization
 {
     private const double HighlightInterval = 0.05;
-    private const double PulseDuration = 0.45;
 
-    private static readonly Windows.UI.Color KeyFill = Windows.UI.Color.FromArgb(255, 224, 223, 209);
-    private static readonly Windows.UI.Color GlowNear = Windows.UI.Color.FromArgb(255, 212, 212, 196);
-    private static readonly Windows.UI.Color GlowFar = Windows.UI.Color.FromArgb(255, 223, 223, 198);
-    private static readonly Windows.UI.Color KeyText = Windows.UI.Color.FromArgb(255, 150, 148, 120);
-    private static readonly Windows.UI.Color HitFill = Windows.UI.Color.FromArgb(255, 144, 249, 227);
-    private static readonly Windows.UI.Color HitGlow = Windows.UI.Color.FromArgb(204, 144, 249, 227);
+    // genshin.music palette: #fff9ef / #eae5ce keys in light, #495466 in dark.
+    private static readonly Windows.UI.Color KeyFillLight = Windows.UI.Color.FromArgb(255, 255, 249, 239);
+    private static readonly Windows.UI.Color KeyBorderLight = Windows.UI.Color.FromArgb(255, 234, 229, 206);
+    private static readonly Windows.UI.Color KeyTextLight = Windows.UI.Color.FromArgb(255, 74, 62, 48);
+    private static readonly Windows.UI.Color KeyFillDark = Windows.UI.Color.FromArgb(255, 73, 84, 102);
+    private static readonly Windows.UI.Color KeyBorderDark = Windows.UI.Color.FromArgb(255, 92, 104, 126);
+    private static readonly Windows.UI.Color KeyTextDark = Windows.UI.Color.FromArgb(255, 234, 232, 230);
 
     private IReadOnlyList<MidiPlayer.MidiNote> notes = Array.Empty<MidiPlayer.MidiNote>();
     private double duration;
@@ -27,10 +27,11 @@ public sealed class KeyboardVisualization : IMidiVisualization
     private double lastPosition;
     private readonly Dictionary<int, List<MidiPlayer.MidiNote>> keyNotes = new();
     private readonly HashSet<int> litKeys = new();
-    private readonly List<(int KeyIndex, double Start)> pulses = new();
     private double keyWidth = 70;
 
     public string Name => "21键键盘";
+
+    private bool IsDarkTheme => Application.Current.RequestedTheme == ApplicationTheme.Dark;
 
     public void Initialize(Grid owner, IReadOnlyList<MidiPlayer.MidiNote> notes, double duration)
     {
@@ -53,7 +54,7 @@ public sealed class KeyboardVisualization : IMidiVisualization
         keyCanvas = new Canvas
         {
             VerticalAlignment = VerticalAlignment.Bottom,
-            Margin = new Thickness(0, 0, 0, 8),
+            Margin = new Thickness(0, 0, 0, 10),
         };
         owner.Children.Add(keyCanvas);
         BuildKeyboard();
@@ -62,7 +63,6 @@ public sealed class KeyboardVisualization : IMidiVisualization
 
     public void Update(double position)
     {
-        UpdatePulses(position);
         if (position - lastHighlight >= HighlightInterval)
         {
             lastHighlight = position;
@@ -73,7 +73,6 @@ public sealed class KeyboardVisualization : IMidiVisualization
     public void Reset()
     {
         lastHighlight = -1;
-        pulses.Clear();
         ClearLitKeys();
     }
 
@@ -81,54 +80,29 @@ public sealed class KeyboardVisualization : IMidiVisualization
     {
         if (keyCanvas is null || viewport is null) return;
         var viewportWidth = SafeWidth();
-        keyWidth = Math.Clamp((viewportWidth - 24) / 7, 44, 110);
+        keyWidth = Math.Clamp((viewportWidth - 32) / 7, 48, 120);
         var keyboardWidth = keyWidth * 7;
         var viewportHeight = SafeHeight();
-        var rowHeight = Math.Min((viewportHeight - 16) / 3, keyWidth * 1.25);
+        var rowHeight = Math.Min((viewportHeight - 20) / 3, keyWidth * 1.2);
         keyCanvas.Width = keyboardWidth;
-        keyCanvas.Height = rowHeight * 3 + 12;
+        keyCanvas.Height = rowHeight * 3 + 14;
         keyCanvas.Children.Clear();
 
+        var (fill, border, text) = ThemeKeys();
         for (var keyIndex = 0; keyIndex < Key21Layout.KeyCount; keyIndex++)
         {
             var (row, column) = Key21Layout.KeyPosition(keyIndex);
             var centerX = column * keyWidth + keyWidth / 2;
-            var centerY = row * rowHeight + rowHeight / 2 + 6;
+            var centerY = row * rowHeight + rowHeight / 2 + 7;
             var diameter = Math.Min(keyWidth - 12, rowHeight - 10);
-
-            var glow = new Ellipse
-            {
-                Width = diameter + 14,
-                Height = diameter + 14,
-                Fill = new SolidColorBrush(GlowNear),
-                Opacity = 0,
-                IsHitTestVisible = false,
-                Tag = 1000 + keyIndex,
-            };
-            Canvas.SetLeft(glow, centerX - glow.Width / 2);
-            Canvas.SetTop(glow, centerY - glow.Height / 2);
-            keyCanvas.Children.Add(glow);
-
-            var halo = new Ellipse
-            {
-                Width = diameter + 26,
-                Height = diameter + 26,
-                Fill = new SolidColorBrush(GlowFar),
-                Opacity = 0,
-                IsHitTestVisible = false,
-                Tag = 2000 + keyIndex,
-            };
-            Canvas.SetLeft(halo, centerX - halo.Width / 2);
-            Canvas.SetTop(halo, centerY - halo.Height / 2);
-            keyCanvas.Children.Add(halo);
 
             var circle = new Ellipse
             {
                 Width = diameter,
                 Height = diameter,
-                Fill = new SolidColorBrush(KeyFill),
-                Stroke = new SolidColorBrush(GlowNear),
-                StrokeThickness = 2,
+                Fill = fill,
+                Stroke = border,
+                StrokeThickness = IsDarkTheme ? 3 : 4,
                 Tag = keyIndex,
                 RenderTransform = new ScaleTransform
                 {
@@ -145,8 +119,8 @@ public sealed class KeyboardVisualization : IMidiVisualization
             var label = new TextBlock
             {
                 Text = Key21Layout.DegreeNames[keyIndex % 7],
-                FontSize = Math.Max(11, diameter * 0.22),
-                Foreground = new SolidColorBrush(KeyText),
+                FontSize = Math.Max(12, diameter * 0.24),
+                Foreground = text,
                 IsHitTestVisible = false,
                 Tag = 3000 + keyIndex,
             };
@@ -155,67 +129,13 @@ public sealed class KeyboardVisualization : IMidiVisualization
             Canvas.SetTop(label, centerY - label.DesiredSize.Height / 2);
             keyCanvas.Children.Add(label);
         }
-
-        AddTriangles(rowHeight);
     }
 
-    private void AddTriangles(double rowHeight)
+    private (Brush Fill, Brush Border, Brush Text) ThemeKeys()
     {
-        if (keyCanvas is null) return;
-        var size = Math.Max(5, keyWidth / 14);
-        var gap = 6.0;
-        for (var row = 0; row < 3; row++)
-        {
-            for (var column = 0; column < 6; column++)
-            {
-                var x = (column + 1) * keyWidth;
-                var y = row * rowHeight + rowHeight / 2 + 6;
-                var left = new Polygon
-                {
-                    Points = new PointCollection { new(0, -size), new(0, size), new(gap, 0) },
-                    Fill = new SolidColorBrush(KeyFill),
-                    IsHitTestVisible = false,
-                };
-                Canvas.SetLeft(left, x - gap - 2);
-                Canvas.SetTop(left, y);
-                keyCanvas.Children.Add(left);
-                var right = new Polygon
-                {
-                    Points = new PointCollection { new(gap, -size), new(gap, size), new(0, 0) },
-                    Fill = new SolidColorBrush(KeyFill),
-                    IsHitTestVisible = false,
-                };
-                Canvas.SetLeft(right, x + 2);
-                Canvas.SetTop(right, y);
-                keyCanvas.Children.Add(right);
-            }
-        }
-        for (var row = 0; row < 2; row++)
-        {
-            for (var column = 0; column < 7; column++)
-            {
-                var x = column * keyWidth + keyWidth / 2;
-                var y = (row + 1) * rowHeight + 6;
-                var up = new Polygon
-                {
-                    Points = new PointCollection { new(-size, 0), new(size, 0), new(0, gap) },
-                    Fill = new SolidColorBrush(KeyFill),
-                    IsHitTestVisible = false,
-                };
-                Canvas.SetLeft(up, x);
-                Canvas.SetTop(up, y - gap - 2);
-                keyCanvas.Children.Add(up);
-                var down = new Polygon
-                {
-                    Points = new PointCollection { new(-size, gap), new(size, gap), new(0, 0) },
-                    Fill = new SolidColorBrush(KeyFill),
-                    IsHitTestVisible = false,
-                };
-                Canvas.SetLeft(down, x);
-                Canvas.SetTop(down, y + 2);
-                keyCanvas.Children.Add(down);
-            }
-        }
+        return IsDarkTheme
+            ? (new SolidColorBrush(KeyFillDark), new SolidColorBrush(KeyBorderDark), new SolidColorBrush(KeyTextDark))
+            : (new SolidColorBrush(KeyFillLight), new SolidColorBrush(KeyBorderLight), new SolidColorBrush(KeyTextLight));
     }
 
     private void Highlight(double position)
@@ -242,14 +162,11 @@ public sealed class KeyboardVisualization : IMidiVisualization
         {
             if (newlyOnset.Contains(keyIndex))
             {
-                pulses.RemoveAll(p => p.KeyIndex == keyIndex);
                 PressKey(keyIndex);
-                pulses.Add((keyIndex, position));
             }
             else if (!litKeys.Contains(keyIndex))
             {
                 PressKey(keyIndex);
-                pulses.Add((keyIndex, position));
             }
         }
         foreach (var keyIndex in litKeys)
@@ -264,16 +181,40 @@ public sealed class KeyboardVisualization : IMidiVisualization
 
     private void PressKey(int keyIndex)
     {
-        SetKeyBrush(keyIndex, HitFill, HitFill, HitGlow);
-        SetLabelBrush(keyIndex, true);
-        AnimateKeyScale(keyIndex, 1.0, 0.86, 90);
+        // genshin.music .click-event: accent background, accent border, white note text, scale(0.9).
+        var accent = (Brush)Application.Current.Resources["AccentBlueBrush"];
+        SetKeyStyle(keyIndex, accent, accent, true);
+        AnimateKeyScale(keyIndex, 1.0, 0.9, 90);
     }
 
     private void ReleaseKey(int keyIndex)
     {
-        SetKeyBrush(keyIndex, KeyFill, GlowNear, Windows.UI.Color.FromArgb(0, 255, 255, 255));
-        SetLabelBrush(keyIndex, false);
-        AnimateKeyScale(keyIndex, 0.86, 1.0, 140);
+        var (fill, border, _) = ThemeKeys();
+        SetKeyStyle(keyIndex, fill, border, false);
+        AnimateKeyScale(keyIndex, 0.9, 1.0, 140);
+    }
+
+    private void SetKeyStyle(int keyIndex, Brush fill, Brush border, bool pressed)
+    {
+        if (keyCanvas is null) return;
+        var textColor = pressed
+            ? new SolidColorBrush(Microsoft.UI.Colors.White)
+            : (SolidColorBrush)(IsDarkTheme ? new SolidColorBrush(KeyTextDark) : new SolidColorBrush(KeyTextLight));
+        foreach (var child in keyCanvas.Children.OfType<Ellipse>())
+        {
+            if (child.Tag is int index && index == keyIndex)
+            {
+                child.Fill = fill;
+                child.Stroke = border;
+            }
+        }
+        foreach (var child in keyCanvas.Children.OfType<TextBlock>())
+        {
+            if (child.Tag is int index && index == 3000 + keyIndex)
+            {
+                child.Foreground = textColor;
+            }
+        }
     }
 
     private void AnimateKeyScale(int keyIndex, double from, double to, int milliseconds)
@@ -307,76 +248,6 @@ public sealed class KeyboardVisualization : IMidiVisualization
             if (child.Tag is int index && index == keyIndex) return child;
         }
         return null;
-    }
-
-    private void UpdatePulses(double position)
-    {
-        if (pulses.Count == 0) return;
-        for (var i = pulses.Count - 1; i >= 0; i--)
-        {
-            var (keyIndex, start) = pulses[i];
-            var progress = (position - start) / PulseDuration;
-            if (progress >= 1.0)
-            {
-                SetPulseOpacity(keyIndex, 0, 1.0);
-                pulses.RemoveAt(i);
-                continue;
-            }
-            var scale = 1.0 + 0.4 * progress;
-            var opacity = 0.55 * (1.0 - progress);
-            SetPulseOpacity(keyIndex, opacity, scale);
-        }
-    }
-
-    private void SetPulseOpacity(int keyIndex, double opacity, double scale)
-    {
-        if (keyCanvas is null) return;
-        foreach (var child in keyCanvas.Children.OfType<Ellipse>())
-        {
-            if (child.Tag is int index && index == 1000 + keyIndex)
-            {
-                child.Opacity = opacity;
-                return;
-            }
-        }
-    }
-
-    private void SetKeyBrush(int keyIndex, Windows.UI.Color fill, Windows.UI.Color stroke, Windows.UI.Color glow)
-    {
-        if (keyCanvas is null) return;
-        foreach (var child in keyCanvas.Children.OfType<Ellipse>())
-        {
-            if (child.Tag is not int index) continue;
-            if (index == keyIndex)
-            {
-                child.Fill = new SolidColorBrush(fill);
-                child.Stroke = new SolidColorBrush(stroke);
-            }
-            else if (index == 1000 + keyIndex)
-            {
-                child.Fill = new SolidColorBrush(glow);
-            }
-            else if (index == 2000 + keyIndex)
-            {
-                child.Fill = new SolidColorBrush(glow);
-            }
-        }
-    }
-
-    private void SetLabelBrush(int keyIndex, bool pressed)
-    {
-        if (keyCanvas is null) return;
-        var color = pressed
-            ? Windows.UI.Color.FromArgb(204, 255, 255, 255)
-            : KeyText;
-        foreach (var child in keyCanvas.Children.OfType<TextBlock>())
-        {
-            if (child.Tag is int index && index == 3000 + keyIndex)
-            {
-                child.Foreground = new SolidColorBrush(color);
-                return;
-            }
-        }
     }
 
     private void ClearLitKeys()

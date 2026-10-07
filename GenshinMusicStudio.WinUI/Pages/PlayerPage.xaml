@@ -51,7 +51,7 @@
                         <Slider x:Name="VolumeSlider" Width="200" Minimum="0" Maximum="100" ValueChanged="VolumeSlider_ValueChanged" />
                         <TextBlock x:Name="VolumeText" Text="90%" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         <TextBlock Text="音符力度" VerticalAlignment="Center" Margin="16,0,0,0" />
-                        <Slider x:Name="BoostSlider" Width="200" Minimum="100" Maximum="300" ValueChanged="BoostSlider_ValueChanged" />
+                        <Slider x:Name="BoostSlider" Width="200" Maximum="300" Minimum="100" ValueChanged="BoostSlider_ValueChanged" />
                         <TextBlock x:Name="BoostText" Text="150%" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
                 </StackPanel>

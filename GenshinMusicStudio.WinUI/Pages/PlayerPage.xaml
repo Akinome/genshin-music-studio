@@ -9,7 +9,7 @@
     <ScrollViewer>
         <StackPanel Padding="24,18,24,24" Spacing="14">
             <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="播放" />
-            <TextBlock Text="选择 MIDI 文件，查看钢琴卷帘并播放。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            <TextBlock Text="选择 MIDI 文件，瀑布流从上往下落下并播放。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
 
             <Border Padding="16" CornerRadius="12" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
                 <Grid ColumnSpacing="8">
@@ -21,9 +21,11 @@
             </Border>
 
             <Border Padding="16" CornerRadius="12" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
-                <ScrollViewer x:Name="RollScroll" Height="380" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                    <Canvas x:Name="RollCanvas" Width="1200" Height="344" />
-                </ScrollViewer>
+                <Grid x:Name="RollViewport" Height="420">
+                    <Canvas x:Name="RollCanvas" VerticalAlignment="Bottom" />
+                    <Rectangle x:Name="HitLine" Height="3" VerticalAlignment="Bottom"
+                               Fill="Orange" IsHitTestVisible="False" />
+                </Grid>
             </Border>
 
             <Border Padding="16" CornerRadius="12" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
@@ -42,7 +44,6 @@
                             </StackPanel>
                         </Button>
                         <TextBlock x:Name="TimeText" Text="0:00 / 0:00" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <TextBlock x:Name="NowPlayingText" Text="" VerticalAlignment="Center" Margin="16,0,0,0" />
                     </StackPanel>
                     <ProgressBar x:Name="PlayProgress" Minimum="0" Maximum="100" />
                     <StackPanel Orientation="Horizontal" Spacing="8">

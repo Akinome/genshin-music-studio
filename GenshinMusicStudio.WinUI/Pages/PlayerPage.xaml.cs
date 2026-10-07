@@ -11,21 +11,31 @@ namespace GenshinMusicStudio_WinUI.Pages;
 
 public sealed partial class PlayerPage : Page
 {
-    private const double PixelsPerSecond = 180;
-    private const double RowHeight = 12;
+    private const double PixelsPerSecond = 140;
+    private const double RespawnInterval = 0.5;
 
     private List<MidiPlayer.MidiNote> notes = new();
     private double duration;
     private double minPitch = 48;
     private double maxPitch = 83;
-    private double playheadSeconds;
+    private double renderBase;
+    private double lastUiUpdate;
     private double lastHighlight;
-    private Rectangle? playhead;
+    private TranslateTransform? waterfallTransform;
 
     public PlayerPage()
     {
         InitializeComponent();
         BoostSlider.Minimum = 100;
+        waterfallTransform = new TranslateTransform();
+        RollCanvas.RenderTransform = waterfallTransform;
+        RollViewport.SizeChanged += (_, args) =>
+        {
+            RollViewport.Clip = new RectangleGeometry
+            {
+                Rect = new Rect(0, 0, args.NewSize.Width, args.NewSize.Height),
+            };
+        };
         Loaded += PlayerPage_Loaded;
         Unloaded += PlayerPage_Unloaded;
     }
@@ -51,6 +61,7 @@ public sealed partial class PlayerPage : Page
 
     private void PlayerPage_Unloaded(object sender, RoutedEventArgs e)
     {
+        Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnRendering;
         App.Player.PlayingChanged -= Player_PlayingChanged;
         App.Player.ProgressChanged -= Player_ProgressChanged;
     }
@@ -87,12 +98,14 @@ public sealed partial class PlayerPage : Page
         {
             RenderRoll(path);
         }
+        renderBase = 0;
         App.Player.Play(new[] { path });
+        Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += OnRendering;
     }
 
     private void Stop_Click(object sender, RoutedEventArgs e) => App.Player.Stop();
 
-    private void VolumeSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    private void VolumeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
     {
         var volume = e.NewValue / 100.0;
         App.Player.Volume = volume;
@@ -102,7 +115,7 @@ public sealed partial class PlayerPage : Page
         AppSettings.Save(settings);
     }
 
-    private void BoostSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    private void BoostSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
     {
         var boost = e.NewValue / 100.0;
         App.Player.VelocityBoost = boost;
@@ -114,24 +127,55 @@ public sealed partial class PlayerPage : Page
 
     private void Player_PlayingChanged(bool playing)
     {
-        DispatcherQueue.TryEnqueue(UpdateControls);
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            UpdateControls();
+            if (!playing)
+            {
+                Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= OnRendering;
+                renderBase = 0;
+                RenderNotesWindow(0);
+                if (waterfallTransform is not null) waterfallTransform.Y = 0;
+            }
+        });
     }
 
     private void Player_ProgressChanged(string file, double position, double total)
     {
         DispatcherQueue.TryEnqueue(() =>
         {
-            playheadSeconds = position;
-            duration = Math.Max(duration, total);
-            TimeText.Text = FormatTime(position) + " / " + FormatTime(duration);
-            PlayProgress.Value = duration > 0 ? position / duration * 100 : 0;
-            MovePlayhead(position);
-            if (position - lastHighlight >= 0.2)
-            {
-                lastHighlight = position;
-                HighlightPlayingNotes(position);
-            }
+            TimeText.Text = FormatTime(position) + " / " + FormatTime(Math.Max(duration, total));
+            PlayProgress.Value = total > 0 ? Math.Clamp(position / total * 100, 0, 100) : 0;
         });
+    }
+
+    private void OnRendering(object sender, object args)
+    {
+        if (!App.Player.IsPlaying) return;
+        var position = App.Player.CurrentPosition;
+        if (position - renderBase >= RespawnInterval)
+        {
+            renderBase = Math.Floor(position / RespawnInterval) * RespawnInterval;
+            RenderNotesWindow(renderBase);
+        }
+        if (waterfallTransform is not null)
+        {
+            waterfallTransform.Y = (position - renderBase) * PixelsPerSecond;
+        }
+        if (position - lastUiUpdate >= 0.25)
+        {
+            lastUiUpdate = position;
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                TimeText.Text = FormatTime(position) + " / " + FormatTime(duration);
+                PlayProgress.Value = duration > 0 ? Math.Clamp(position / duration * 100, 0, 100) : 0;
+            });
+        }
+        if (position - lastHighlight >= 0.25)
+        {
+            lastHighlight = position;
+            HighlightPlayingNotes(position);
+        }
     }
 
     private void UpdateControls()
@@ -158,88 +202,64 @@ public sealed partial class PlayerPage : Page
             _ = ShowMessageAsync("没有音符", "该 MIDI 文件中没有识别到音符。");
             return;
         }
+        renderBase = 0;
+        RenderNotesWindow(0);
+        TimeText.Text = "0:00 / " + FormatTime(duration);
+    }
 
-        minPitch = Math.Floor((double)notes.Min(n => n.Pitch));
-        maxPitch = Math.Ceiling((double)notes.Max(n => n.Pitch));
-        if (maxPitch - minPitch < 23)
-        {
-            maxPitch = minPitch + 23;
-        }
-
-        var width = Math.Max(1200, duration * PixelsPerSecond + 120);
-        var height = (maxPitch - minPitch + 1) * RowHeight;
-        RollCanvas.Width = width;
-        RollCanvas.Height = height;
+    private void RenderNotesWindow(double baseTime)
+    {
+        if (waterfallTransform is null) return;
+        var range = (int)(maxPitch - minPitch);
+        if (range < 35) range = 35;
+        var viewportWidth = RollViewport.ActualWidth;
+        if (double.IsNaN(viewportWidth) || viewportWidth < 100) viewportWidth = 1100;
+        var keyWidth = Math.Clamp(viewportWidth / (range + 1), 10, 26);
+        var viewportHeight = RollViewport.ActualHeight;
+        if (double.IsNaN(viewportHeight) || viewportHeight < 100) viewportHeight = 420;
+        var windowSeconds = viewportHeight / PixelsPerSecond + 1.5;
+        var canvasHeight = windowSeconds * PixelsPerSecond;
+        var canvasWidth = (range + 1) * keyWidth;
+        RollCanvas.Width = canvasWidth;
+        RollCanvas.Height = canvasHeight;
         RollCanvas.Children.Clear();
 
-        var gridBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(36, 128, 128, 128));
-        var cLineBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(70, 128, 128, 128));
-        for (var second = 0; second <= duration; second += 5)
+        var laneBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(30, 128, 128, 128));
+        var cLineBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(60, 128, 128, 128));
+        for (var pitch = (int)minPitch; pitch <= (int)maxPitch; pitch++)
         {
             var line = new Rectangle
             {
                 Width = 1,
-                Height = height,
-                Fill = gridBrush,
+                Height = canvasHeight,
+                Fill = pitch % 12 == 0 ? cLineBrush : laneBrush,
             };
-            Canvas.SetLeft(line, second * PixelsPerSecond);
+            Canvas.SetLeft(line, (pitch - minPitch) * keyWidth + keyWidth - 1);
             Canvas.SetTop(line, 0);
-            RollCanvas.Children.Add(line);
-        }
-        for (var pitch = (int)minPitch; pitch <= (int)maxPitch; pitch++)
-        {
-            if (pitch % 12 != 0) continue;
-            var line = new Rectangle
-            {
-                Width = width,
-                Height = 1,
-                Fill = cLineBrush,
-            };
-            Canvas.SetLeft(line, 0);
-            Canvas.SetTop(line, (maxPitch - pitch) * RowHeight + RowHeight);
             RollCanvas.Children.Add(line);
         }
 
         var noteBrush = (Brush)Application.Current.Resources["AccentBlueBrush"];
+        var halfViewport = viewportHeight;
         foreach (var note in notes)
         {
+            if (note.End < baseTime - 0.1) continue;
+            if (note.Start > baseTime + windowSeconds) continue;
+            var top = canvasHeight - (note.End - baseTime) * PixelsPerSecond;
+            if (top < -halfViewport || top > canvasHeight) continue;
             var rect = new Rectangle
             {
-                Width = Math.Max(3, (note.End - note.Start) * PixelsPerSecond),
-                Height = RowHeight - 2,
-                RadiusX = 2,
-                RadiusY = 2,
+                Width = Math.Max(4, keyWidth - 3),
+                Height = Math.Max(6, (note.End - note.Start) * PixelsPerSecond),
+                RadiusX = 3,
+                RadiusY = 3,
                 Fill = noteBrush,
-                Opacity = 0.85,
+                Opacity = 0.88,
                 Tag = note,
             };
-            Canvas.SetLeft(rect, note.Start * PixelsPerSecond);
-            Canvas.SetTop(rect, (maxPitch - note.Pitch) * RowHeight + 1);
+            Canvas.SetLeft(rect, (note.Pitch - minPitch) * keyWidth + 1.5);
+            Canvas.SetTop(rect, top);
             RollCanvas.Children.Add(rect);
-        }
-
-        playhead = new Rectangle
-        {
-            Width = 2,
-            Height = height,
-            Fill = new SolidColorBrush(Microsoft.UI.Colors.Orange),
-        };
-        Canvas.SetLeft(playhead, 0);
-        Canvas.SetTop(playhead, 0);
-        RollCanvas.Children.Add(playhead);
-        TimeText.Text = "0:00 / " + FormatTime(duration);
-    }
-
-    private void MovePlayhead(double position)
-    {
-        if (playhead is null) return;
-        var x = Math.Clamp(position * PixelsPerSecond, 0, RollCanvas.Width - 2);
-        Canvas.SetLeft(playhead, x);
-        var viewport = RollScroll.ViewportWidth;
-        var offset = RollScroll.HorizontalOffset;
-        if (x < offset + 40 || x > offset + viewport - 60)
-        {
-            RollScroll.ChangeView(Math.Max(0, x - viewport / 2), null, null, true);
         }
     }
 

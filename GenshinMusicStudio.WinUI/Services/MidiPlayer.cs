@@ -38,6 +38,7 @@ public sealed class MidiPlayer : IDisposable
     private double volume = 0.9;
     private double velocityBoost = 1.5;
     private List<(double Start, double Duration)> fileRanges = new();
+    private Stopwatch? playbackClock;
 
     public event Action<bool>? PlayingChanged;
     public event Action<string, double, double>? ProgressChanged;
@@ -45,6 +46,8 @@ public sealed class MidiPlayer : IDisposable
 
     public bool IsPlaying => thread is { IsAlive: true } && !stopRequested;
     public string? PlayingFolder { get; private set; }
+
+    public double CurrentPosition => playbackClock?.Elapsed.TotalSeconds ?? 0;
 
     public double Volume
     {
@@ -149,6 +152,7 @@ public sealed class MidiPlayer : IDisposable
             fileRanges = new List<(double Start, double Duration)>();
             var events = BuildPlaylistEvents(playlist, fileRanges);
             var clock = Stopwatch.StartNew();
+            playbackClock = clock;
             var total = events.Count > 0 ? events[^1].Time : 0;
             var lastReport = -1.0;
             foreach (var evt in events)
@@ -179,6 +183,7 @@ public sealed class MidiPlayer : IDisposable
         }
         finally
         {
+            playbackClock = null;
             lock (gate)
             {
                 if (opened)

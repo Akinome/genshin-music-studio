@@ -25,6 +25,7 @@ public sealed partial class PlayerPage : Page
     public PlayerPage()
     {
         InitializeComponent();
+        BoostSlider.Minimum = 100;
         Loaded += PlayerPage_Loaded;
         Unloaded += PlayerPage_Unloaded;
     }

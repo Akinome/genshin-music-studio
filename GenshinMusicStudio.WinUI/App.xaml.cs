@@ -20,6 +20,7 @@ public partial class App : Application
 
     public static MainWindow MainWindow { get; private set; } = null!;
     public static StudioBackendClient Backend { get; } = new();
+    public static MidiPlayer Player { get; } = new();
     
     /// <summary>
     /// Initializes the singleton application object.  This is the first line of authored code

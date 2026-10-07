@@ -34,7 +34,33 @@ public sealed partial class MainWindow : Window
         AppTitleBar.Loaded += (_, _) => UpdateTitleBarDragRegion();
         App.Backend.EventReceived += Backend_EventReceived;
         App.Backend.RunningChanged += Backend_RunningChanged;
+        App.Player.ProgressChanged += Player_ProgressChanged;
+        App.Player.PlayingChanged += Player_PlayingChanged;
         NavFrame.Navigate(typeof(DownloadPage));
+    }
+
+    private void Player_PlayingChanged(bool playing)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!playing && StatusText.Text.StartsWith("正在播放", StringComparison.Ordinal))
+            {
+                StatusText.Text = "就绪";
+                RunProgress.Value = 0;
+            }
+        });
+    }
+
+    private void Player_ProgressChanged(string file, double position, double duration)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (string.IsNullOrWhiteSpace(file)) return;
+            var name = Path.GetFileName(file);
+            StatusText.Text = string.Format("正在播放: {0}  ({1:0}:{2:00} / {3:0}:{4:00})",
+                name, (int)(position / 60), (int)position % 60, (int)(duration / 60), (int)duration % 60);
+            RunProgress.Value = duration > 0 ? Math.Clamp(position / duration * 100, 0, 100) : 0;
+        });
     }
 
     private void ThemeToggle_Click(object sender, RoutedEventArgs e)

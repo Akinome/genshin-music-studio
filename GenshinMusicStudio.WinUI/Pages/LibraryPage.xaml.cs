@@ -8,15 +8,32 @@ namespace GenshinMusicStudio_WinUI.Pages;
 public sealed partial class LibraryPage : Page
 {
     private AppSettingsData settings = new();
+    private string? playingFolder;
 
     public LibraryPage()
     {
         InitializeComponent();
         Loaded += LibraryPage_Loaded;
+        Unloaded += LibraryPage_Unloaded;
+    }
+
+    private void LibraryPage_Unloaded(object sender, RoutedEventArgs e)
+    {
+        App.Player.PlayingChanged -= Player_PlayingChanged;
+    }
+
+    private void Player_PlayingChanged(bool playing)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!playing) playingFolder = null;
+            RenderLibrary();
+        });
     }
 
     private void LibraryPage_Loaded(object sender, RoutedEventArgs e)
     {
+        App.Player.PlayingChanged += Player_PlayingChanged;
         settings = AppSettings.Load();
         if (settings.LibraryFolders is null)
         {
@@ -52,6 +69,32 @@ public sealed partial class LibraryPage : Page
     {
         settings.LibraryFolders?.Remove(folder);
         AppSettings.Save(settings);
+        RenderLibrary();
+    }
+
+    private void TogglePlay(LibraryFolderData folder)
+    {
+        if (playingFolder == folder.Path && App.Player.IsPlaying)
+        {
+            App.Player.Stop();
+            return;
+        }
+        if (!Directory.Exists(folder.Path))
+        {
+            _ = ShowMessageAsync("目录不存在", "该目录在磁盘上不存在。");
+            return;
+        }
+        var files = Directory.EnumerateFiles(folder.Path, "*.*", SearchOption.AllDirectories)
+            .Where(f => f.EndsWith(".mid", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".midi", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (files.Count == 0)
+        {
+            _ = ShowMessageAsync("没有找到 MIDI", "该目录中没有 MIDI 文件。");
+            return;
+        }
+        playingFolder = folder.Path;
+        App.Player.Play(files, folder.Path);
         RenderLibrary();
     }
 
@@ -223,6 +266,7 @@ public sealed partial class LibraryPage : Page
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             var iconBorder = new Border
             {
@@ -259,6 +303,17 @@ public sealed partial class LibraryPage : Page
             Grid.SetColumn(pathText, 3);
             grid.Children.Add(pathText);
 
+            var isPlayingThis = playingFolder == folder.Path && App.Player.IsPlaying;
+            var play = new Button
+            {
+                Content = new FontIcon { Glyph = isPlayingThis ? "\uE71A" : "\uE768" },
+                Padding = new Thickness(10, 6, 10, 6),
+            };
+            ToolTipService.SetToolTip(play, isPlayingThis ? "停止播放" : "播放该目录 MIDI");
+            play.Click += (_, _) => TogglePlay(folder);
+            Grid.SetColumn(play, 4);
+            grid.Children.Add(play);
+
             var open = new Button
             {
                 Content = new FontIcon { Glyph = "\uE8A7" },
@@ -266,7 +321,7 @@ public sealed partial class LibraryPage : Page
             };
             ToolTipService.SetToolTip(open, "打开目录");
             open.Click += (_, _) => OpenFolder(folder.Path);
-            Grid.SetColumn(open, 4);
+            Grid.SetColumn(open, 5);
             grid.Children.Add(open);
 
             var remove = new Button
@@ -276,7 +331,7 @@ public sealed partial class LibraryPage : Page
             };
             ToolTipService.SetToolTip(remove, "从列表移除");
             remove.Click += (_, _) => RemoveLibraryFolder(folder);
-            Grid.SetColumn(remove, 5);
+            Grid.SetColumn(remove, 6);
             grid.Children.Add(remove);
 
             var more = new Button
@@ -290,7 +345,7 @@ public sealed partial class LibraryPage : Page
             menu.Items.Add(CreateMenuItem("设为备份谱库", () => SetLibraryRole(folder, s => s.BackupDir = folder.Path)));
             menu.Items.Add(CreateMenuItem("迁移 MIDI 到新目录...", () => _ = MigrateFolderAsync(folder)));
             more.Flyout = menu;
-            Grid.SetColumn(more, 6);
+            Grid.SetColumn(more, 7);
             grid.Children.Add(more);
 
             row.Child = grid;

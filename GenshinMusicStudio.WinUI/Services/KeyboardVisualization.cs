@@ -84,8 +84,9 @@ public sealed class KeyboardVisualization : IMidiVisualization
     {
         if (keyCanvas is null || viewport is null) return;
         var viewportWidth = SafeWidth();
-        keyWidth = Math.Clamp((viewportWidth - 32) / 7, 48, 120);
-        var keyboardWidth = keyWidth * 7;
+        var columns = layout.Columns;
+        keyWidth = Math.Clamp((viewportWidth - 32) / columns, 48, 120);
+        var keyboardWidth = keyWidth * columns;
         var viewportHeight = SafeHeight();
         var rowHeight = Math.Min((viewportHeight - 20) / 3, keyWidth * 1.2);
         keyCanvas.Width = keyboardWidth;
@@ -95,8 +96,8 @@ public sealed class KeyboardVisualization : IMidiVisualization
         var (fill, border, text) = ThemeKeys();
         for (var keyIndex = 0; keyIndex < layout.KeyCount; keyIndex++)
         {
-            var row = keyIndex / 7;
-            var column = keyIndex % 7;
+            var row = keyIndex / columns;
+            var column = keyIndex % columns;
             var centerX = column * keyWidth + keyWidth / 2;
             var centerY = row * rowHeight + rowHeight / 2 + 7;
             var diameter = Math.Min(keyWidth - 12, rowHeight - 10);

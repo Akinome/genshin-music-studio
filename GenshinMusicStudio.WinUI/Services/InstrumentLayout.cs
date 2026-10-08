@@ -9,8 +9,10 @@ public sealed class InstrumentLayout
     public int Octaves { get; init; } = 3;
     public int LowOctave { get; init; }
     public bool ByMidiName { get; init; }
+    public bool IsDrumKit { get; init; }
 
-    public int KeyCount => Octaves * 7;
+    public int Columns => IsDrumKit ? 4 : 7;
+    public int KeyCount => IsDrumKit ? 8 : Octaves * 7;
     public int LowPitch => LowOctave * 12 + 48;
     public int HighPitch => LowPitch + Octaves * 12 - 1;
     public int TopOctave => LowOctave + Octaves - 1;
@@ -24,11 +26,35 @@ public sealed class InstrumentLayout
 
     public int KeyIndexForPitch(int pitch)
     {
+        if (IsDrumKit)
+        {
+            return NearestDrumIndex(pitch);
+        }
         pitch = FoldPitch(pitch);
         var mapped = ChromaticToDiatonic[pitch % 12];
         var degree = SemitoneToDegree[mapped];
         var octave = (pitch - 48) / 12;
         return (TopOctave - octave) * 7 + degree;
+    }
+
+    private static readonly int[] DrumPitches = { 60, 62, 64, 65, 72, 74, 76, 77 };
+
+    private static int NearestDrumIndex(int pitch)
+    {
+        while (pitch < 60) pitch += 12;
+        while (pitch > 77) pitch -= 12;
+        var best = 0;
+        var bestDistance = int.MaxValue;
+        for (var i = 0; i < DrumPitches.Length; i++)
+        {
+            var distance = Math.Abs(DrumPitches[i] - pitch);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = i;
+            }
+        }
+        return best;
     }
 
     public int PitchForKeyIndex(int keyIndex)
@@ -44,6 +70,7 @@ public sealed class InstrumentLayout
         {
             "genshin-2x7" => new InstrumentLayout { Octaves = 2, LowOctave = 0, ByMidiName = byMidiName },
             "genshin-2x7-high" => new InstrumentLayout { Octaves = 2, LowOctave = 1, ByMidiName = byMidiName },
+            "genshin-2x4" => new InstrumentLayout { IsDrumKit = true, ByMidiName = byMidiName },
             _ => new InstrumentLayout { Octaves = 3, LowOctave = 0, ByMidiName = byMidiName },
         };
     }

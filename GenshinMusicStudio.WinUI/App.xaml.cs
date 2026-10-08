@@ -60,5 +60,24 @@ public partial class App : Application
         MainWindow = new MainWindow();
         _window = MainWindow;
         _window.Activate();
+        RestoreDefaultInstrument();
+    }
+
+    private static void RestoreDefaultInstrument()
+    {
+        try
+        {
+            var saved = AppSettings.Load().AudioInstrument;
+            if (string.IsNullOrEmpty(saved) || !Directory.Exists(saved)) return;
+            Task.Run(() =>
+            {
+                App.Instruments.LoadInstrument(saved);
+                App.Player.Instrument = App.Instruments;
+                App.Instruments.SetDeviceVolume(App.Player.Volume);
+            });
+        }
+        catch
+        {
+        }
     }
 }

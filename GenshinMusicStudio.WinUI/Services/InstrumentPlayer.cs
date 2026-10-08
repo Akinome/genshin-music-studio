@@ -27,6 +27,11 @@ public sealed class InstrumentPlayer : IDisposable
     {
         lock (gate)
         {
+            if (samples.Count > 0
+                && string.Equals(currentInstrument, Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)), StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
             samples.Clear();
             activeVoices.Clear();
             currentInstrument = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar));

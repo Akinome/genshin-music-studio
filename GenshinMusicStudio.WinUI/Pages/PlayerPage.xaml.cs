@@ -63,6 +63,10 @@ public sealed partial class PlayerPage : Page
             RenderRoll(FilePathBox.Text);
         }
         SetMode(waterfallMode);
+        if (App.Player.IsPlaying)
+        {
+            renderTimer?.Start();
+        }
         UpdateControls();
     }
 
@@ -226,7 +230,11 @@ public sealed partial class PlayerPage : Page
         DispatcherQueue.TryEnqueue(() =>
         {
             UpdateControls();
-            if (!playing && !App.Player.IsPlaying)
+            if (playing)
+            {
+                renderTimer?.Start();
+            }
+            else if (!App.Player.IsPlaying)
             {
                 renderTimer?.Stop();
                 visualization?.Reset();

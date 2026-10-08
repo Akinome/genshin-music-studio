@@ -34,7 +34,10 @@ public sealed class WaterfallVisualization : IMidiVisualization
         if (maxPitch - minPitch < 23) maxPitch = minPitch + 23;
 
         owner.Children.Clear();
-        canvas = new Canvas();
+        canvas = new Canvas
+        {
+            VerticalAlignment = VerticalAlignment.Bottom,
+        };
         transform = new TranslateTransform();
         canvas.RenderTransform = transform;
         owner.Children.Add(canvas);

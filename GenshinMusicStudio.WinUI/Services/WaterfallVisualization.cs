@@ -53,7 +53,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
     public void Update(double position)
     {
         if (canvas is null || transform is null || viewport is null) return;
-        if (position - renderBase >= RespawnInterval)
+        if (position < renderBase || position - renderBase >= RespawnInterval)
         {
             renderBase = Math.Floor(position / RespawnInterval) * RespawnInterval;
             RenderWindow(renderBase);

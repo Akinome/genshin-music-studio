@@ -94,12 +94,17 @@ public sealed partial class PlayerPage : Page
 
     private void Play_Click(object sender, RoutedEventArgs e)
     {
-        var path = FilePathBox.Text.Trim();
         if (App.Player.IsPlaying)
         {
-            App.Player.Stop();
+            App.Player.Pause();
             return;
         }
+        if (App.Player.IsPaused)
+        {
+            App.Player.Resume();
+            return;
+        }
+        var path = FilePathBox.Text.Trim();
         if (path.Length == 0 || !File.Exists(path))
         {
             _ = ShowMessageAsync("缺少文件", "请选择有效的 MIDI 文件。");
@@ -234,6 +239,10 @@ public sealed partial class PlayerPage : Page
             {
                 renderTimer?.Start();
             }
+            else if (App.Player.IsPaused)
+            {
+                renderTimer?.Stop();
+            }
             else if (!App.Player.IsPlaying)
             {
                 renderTimer?.Stop();
@@ -270,9 +279,10 @@ public sealed partial class PlayerPage : Page
     private void UpdateControls()
     {
         var playing = App.Player.IsPlaying;
+        var paused = App.Player.IsPaused;
         PlayIcon.Glyph = playing ? "\uE769" : "\uE768";
-        PlayText.Text = playing ? "暂停" : "播放";
-        StopButton.IsEnabled = playing;
+        PlayText.Text = playing ? "暂停" : paused ? "继续" : "播放";
+        StopButton.IsEnabled = playing || paused;
     }
 
     private void RenderRoll(string path)

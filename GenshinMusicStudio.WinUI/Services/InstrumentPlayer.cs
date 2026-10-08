@@ -91,6 +91,22 @@ public sealed class InstrumentPlayer : IDisposable
         }
     }
 
+    public void ReleaseAll()
+    {
+        lock (gate)
+        {
+            foreach (var pair in activeVoices)
+            {
+                foreach (var voice in pair.Value)
+                {
+                    if (releaseSeconds > 0) voice.StartFade(releaseSeconds);
+                }
+                pair.Value.Clear();
+            }
+            activeVoices.Clear();
+        }
+    }
+
     public void SetDeviceVolume(double volume)
     {
         lock (gate)

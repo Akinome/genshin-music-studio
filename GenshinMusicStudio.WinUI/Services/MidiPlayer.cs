@@ -41,17 +41,22 @@ public sealed class MidiPlayer : IDisposable
     private double velocityBoost = 1.5;
     private List<(double Start, double Duration)> fileRanges = new();
     private Stopwatch? playbackClock;
+    private double pausedPosition;
+    private double playbackStart;
 
     public event Action<bool>? PlayingChanged;
     public event Action<string, double, double>? ProgressChanged;
     public event Action<string>? PlaybackError;
 
     public bool IsPlaying => thread is { IsAlive: true } && !stopRequested;
+    public bool IsPaused { get; private set; }
     public string? PlayingFolder { get; private set; }
 
     public InstrumentPlayer? Instrument { get; set; }
 
-    public double CurrentPosition => playbackClock?.Elapsed.TotalSeconds ?? 0;
+    public double CurrentPosition => playbackClock is null
+        ? (IsPaused ? pausedPosition : playbackStart)
+        : playbackStart + playbackClock.Elapsed.TotalSeconds;
 
     public double Volume
     {
@@ -121,6 +126,33 @@ public sealed class MidiPlayer : IDisposable
         PlayingFolder = folder;
         stopRequested = false;
         playlist = files;
+        playbackStart = 0;
+        thread = new Thread(PlayLoop) { IsBackground = true };
+        thread.Start();
+        PlayingChanged?.Invoke(true);
+    }
+
+    public void Pause()
+    {
+        if (!IsPlaying) return;
+        pausedPosition = CurrentPosition;
+        IsPaused = true;
+        stopRequested = true;
+        var current = thread;
+        if (current is { IsAlive: true } && current != Thread.CurrentThread)
+        {
+            current.Join(1500);
+        }
+        Instrument?.ReleaseAll();
+        PlayingChanged?.Invoke(false);
+    }
+
+    public void Resume()
+    {
+        if (!IsPaused) return;
+        IsPaused = false;
+        stopRequested = false;
+        playbackStart = pausedPosition;
         thread = new Thread(PlayLoop) { IsBackground = true };
         thread.Start();
         PlayingChanged?.Invoke(true);
@@ -129,6 +161,9 @@ public sealed class MidiPlayer : IDisposable
     public void Stop()
     {
         stopRequested = true;
+        IsPaused = false;
+        pausedPosition = 0;
+        playbackStart = 0;
         var current = thread;
         if (current is { IsAlive: true } && current != Thread.CurrentThread)
         {
@@ -142,6 +177,7 @@ public sealed class MidiPlayer : IDisposable
 
     private void PlayLoop()
     {
+        var startFrom = playbackStart;
         try
         {
             if (Instrument is null)
@@ -166,13 +202,14 @@ public sealed class MidiPlayer : IDisposable
             foreach (var evt in events)
             {
                 if (stopRequested) return;
-                var wait = evt.Time - lead - clock.Elapsed.TotalSeconds;
+                if (evt.Time < startFrom - 0.001) continue;
+                var wait = evt.Time - startFrom - lead - clock.Elapsed.TotalSeconds;
                 if (wait > 0) Thread.Sleep((int)Math.Min(wait * 1000, 500));
                 if (stopRequested) return;
                 if (evt.Time - lastReport >= 0.25)
                 {
                     lastReport = evt.Time;
-                    ReportProgress(evt.Time, total);
+                    ReportProgress(startFrom + clock.Elapsed.TotalSeconds, total);
                 }
                 if (evt.IsOn)
                 {
@@ -195,7 +232,7 @@ public sealed class MidiPlayer : IDisposable
                 }
             }
 
-            var tail = total + 0.8 - clock.Elapsed.TotalSeconds;
+            var tail = (total - startFrom) + 0.8 - clock.Elapsed.TotalSeconds;
             while (tail > 0 && !stopRequested)
             {
                 ReportProgress(total, total);

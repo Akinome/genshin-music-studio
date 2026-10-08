@@ -165,6 +165,7 @@ public sealed partial class PlayerPage : Page
     {
         if (AudioBox.SelectedItem is not ComboBoxItem item) return;
         var folder = item.Tag?.ToString() ?? string.Empty;
+        App.Player.Stop();
         if (folder.Length == 0)
         {
             App.Player.Instrument = null;
@@ -179,6 +180,10 @@ public sealed partial class PlayerPage : Page
             if (App.Instruments.Layout.IsDrumKit)
             {
                 SetMode(keyboardMode);
+            }
+            else if (visualization is not null)
+            {
+                visualization.Initialize(RollViewport, notes, duration);
             }
         }
         catch (Exception ex)
@@ -288,6 +293,7 @@ public sealed partial class PlayerPage : Page
         visualization = mode;
         WaterfallModeButton.IsChecked = mode == waterfallMode;
         KeyboardModeButton.IsChecked = mode == keyboardMode;
+        KeyboardModeButton.Content = keyboardMode.Name;
         if (notes.Count == 0)
         {
             RollViewport.Children.Clear();

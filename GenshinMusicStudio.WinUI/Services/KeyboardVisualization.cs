@@ -31,7 +31,7 @@ public sealed class KeyboardVisualization : IMidiVisualization
     private double keyWidth = 70;
     private InstrumentLayout layout = new();
 
-    public string Name => "21键键盘";
+    public string Name => $"{layout.KeyCount}键键盘";
 
     private bool IsDarkTheme => Application.Current.RequestedTheme == ApplicationTheme.Dark;
 

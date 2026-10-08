@@ -111,7 +111,7 @@ def stabilize_pitch(pitch, tonic, scale):
     return pitch
 
 
-def optimize_midi(input_path, output_path, grid=None, merge_gap_ms=15, min_note_ms=30, scale_snap=True):
+def optimize_midi(input_path, output_path, grid=None, merge_gap_ms=15, min_note_ms=30, scale_snap=False):
     tpb, tempo, notes = read_notes(input_path)
     if not notes:
         raise ValueError("MIDI 中没有音符")

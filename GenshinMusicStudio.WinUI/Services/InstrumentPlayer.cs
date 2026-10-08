@@ -21,6 +21,8 @@ public sealed class InstrumentPlayer : IDisposable
     public string CurrentInstrument => currentInstrument;
     public InstrumentLayout Layout => layout;
 
+    public double LatencySeconds => 0.1;
+
     public void LoadInstrument(string folder)
     {
         lock (gate)
@@ -107,7 +109,11 @@ public sealed class InstrumentPlayer : IDisposable
         {
             ReadFully = true,
         };
-        output = new WaveOutEvent();
+        output = new WaveOutEvent
+        {
+            DesiredLatency = 150,
+            NumberOfBuffers = 2,
+        };
         output.Init(mixer);
         output.Play();
     }

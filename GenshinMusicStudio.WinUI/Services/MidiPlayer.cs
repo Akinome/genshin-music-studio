@@ -162,10 +162,11 @@ public sealed class MidiPlayer : IDisposable
             playbackClock = clock;
             var total = events.Count > 0 ? events[^1].Time : 0;
             var lastReport = -1.0;
+            var lead = Instrument?.LatencySeconds ?? 0.02;
             foreach (var evt in events)
             {
                 if (stopRequested) return;
-                var wait = evt.Time - clock.Elapsed.TotalSeconds;
+                var wait = evt.Time - lead - clock.Elapsed.TotalSeconds;
                 if (wait > 0) Thread.Sleep((int)Math.Min(wait * 1000, 500));
                 if (stopRequested) return;
                 if (evt.Time - lastReport >= 0.25)

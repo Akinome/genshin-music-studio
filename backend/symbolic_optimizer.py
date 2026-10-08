@@ -111,7 +111,8 @@ def stabilize_pitch(pitch, tonic, scale):
     return pitch
 
 
-def optimize_midi(input_path, output_path, grid=None, merge_gap_ms=15, min_note_ms=30, scale_snap=False):
+def optimize_midi(input_path, output_path, grid=None, merge_gap_ms=15, min_note_ms=30,
+                  scale_snap=False, auto_transpose=True):
     tpb, tempo, notes = read_notes(input_path)
     if not notes:
         raise ValueError("MIDI 中没有音符")
@@ -121,7 +122,17 @@ def optimize_midi(input_path, output_path, grid=None, merge_gap_ms=15, min_note_
     merge_gap_ticks = max(1, round(merge_gap_ms / 1000.0 * tpb * 1e6 / tempo))
 
     notes = merge_fragments(notes, merge_gap_ticks)
-    tonic, mode, scale = detect_key(notes) if scale_snap else (0, "major", MAJOR_SCALE)
+    tonic, mode, scale = detect_key(notes) if (scale_snap or auto_transpose) else (0, "major", MAJOR_SCALE)
+    transposed_by = 0
+    if auto_transpose and not scale_snap:
+        # Force the whole song into C major / A minor so every pitch lands on a
+        # natural key: the melody's intervals survive, unlike per-note snapping.
+        target_tonic = 0 if mode == "major" else 9
+        transposed_by = (target_tonic - tonic) % 12
+        if transposed_by:
+            for note in notes:
+                note["note"] = max(0, min(127, note["note"] + transposed_by))
+        tonic = target_tonic
     optimized = []
     for note in notes:
         start = int(round(note["start"] / grid) * grid)
@@ -153,4 +164,5 @@ def optimize_midi(input_path, output_path, grid=None, merge_gap_ms=15, min_note_
         "notes_out": len(optimized),
         "key": "%s %s" % (["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][tonic], mode),
         "grid_ticks": grid,
+        "transposed_by": transposed_by,
     }

@@ -18,7 +18,7 @@ public sealed class BackendRequest
     [JsonPropertyName("browser")] public string? Browser { get; set; }
     [JsonPropertyName("allow_playlist")] public bool AllowPlaylist { get; set; }
     [JsonPropertyName("min_gap_ms")] public int MinGapMs { get; set; } = 60;
-    [JsonPropertyName("melody_only")] public bool MelodyOnly { get; set; } = true;
+    [JsonPropertyName("melody_only")] public bool MelodyOnly { get; set; } = false;
     [JsonPropertyName("preserve_duration")] public bool PreserveDuration { get; set; } = true;
     [JsonPropertyName("model")] public string? Model { get; set; } = "basic_pitch_onnx";
     [JsonPropertyName("install_targets")] public List<string>? InstallTargets { get; set; }

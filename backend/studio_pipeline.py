@@ -8,7 +8,7 @@ import media_tools
 import symbolic_optimizer
 
 
-def conversion_config(min_gap_ms=60, melody_only=True, preserve_duration=True, low=48, high=83,
+def conversion_config(min_gap_ms=60, melody_only=False, preserve_duration=True, low=48, high=83,
                       transpose=0, press_ms=120, collapse_window_ms=10):
     return {
         "range": {"low": low, "high": high},

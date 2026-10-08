@@ -30,7 +30,7 @@
             <Border Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
                 <StackPanel Spacing="8">
                     <TextBlock Text="转换选项" FontWeight="SemiBold" />
-                    <CheckBox x:Name="MelodyBox" Content="只保留主旋律" IsChecked="True" />
+                    <CheckBox x:Name="MelodyBox" Content="只保留主旋律" IsChecked="False" />
                     <CheckBox x:Name="PreserveBox" Content="保持原曲时长" IsChecked="True" />
                     <Grid ColumnSpacing="8">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="110"/></Grid.ColumnDefinitions>

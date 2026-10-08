@@ -31,7 +31,7 @@ def log(text):
 def build_config(request):
     return studio_pipeline.conversion_config(
         min_gap_ms=int(request.get("min_gap_ms", 60)),
-        melody_only=bool(request.get("melody_only", True)),
+        melody_only=bool(request.get("melody_only", False)),
         preserve_duration=bool(request.get("preserve_duration", True)),
     )
 

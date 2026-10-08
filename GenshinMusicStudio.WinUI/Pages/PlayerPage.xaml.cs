@@ -115,14 +115,16 @@ public sealed partial class PlayerPage : Page
 
     private static readonly Dictionary<string, string> InstrumentNames = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["Lyre"] = "风物之诗琴 Lyre",
-        ["Zither"] = "琴 Zither",
-        ["Old-Zither"] = "旧式琴 Old Zither",
-        ["Vintage-Lyre"] = "复古琴 Vintage Lyre",
-        ["HarmonicKey"] = "和声键琴 Harmonic Keys",
-        ["LeapingSpiritPiano"] = "跃动灵琴 Leaping Spirit Piano",
-        ["LingeringEuphonia"] = "余音琴 Lingering Euphonia",
-        ["Ukulele"] = "尤克里里 Ukulele",
+        ["Lyre"] = "风物之诗琴",
+        ["Zither"] = "镜花之琴",
+        ["Old-Zither"] = "镜花之琴(旧版)",
+        ["Vintage-Lyre"] = "老旧的诗琴",
+        ["Ukulele"] = "悠可琴",
+        ["LeapingSpiritPiano"] = "跃律琴",
+        ["HarmonicKey"] = "谐律键琴",
+        ["LingeringEuphonia"] = "余音",
+        ["NightwindHorn"] = "夜风号角",
+        ["Vodyanitsa"] = "水灵琴",
     };
 
     private void LoadAudioOptions()

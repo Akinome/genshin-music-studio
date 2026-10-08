@@ -16,8 +16,10 @@ public sealed class InstrumentPlayer : IDisposable
     private MixingSampleProvider? mixer;
     private string currentInstrument = string.Empty;
     private double releaseSeconds;
+    private InstrumentLayout layout = new();
 
     public string CurrentInstrument => currentInstrument;
+    public InstrumentLayout Layout => layout;
 
     public void LoadInstrument(string folder)
     {
@@ -27,28 +29,36 @@ public sealed class InstrumentPlayer : IDisposable
             activeVoices.Clear();
             currentInstrument = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar));
             releaseSeconds = ReadReleaseSeconds(folder);
+            layout = InstrumentLayout.FromShape(ReadShape(folder), DetectMidiNaming(folder));
             foreach (var file in Directory.EnumerateFiles(folder, "*.mp3"))
             {
                 var name = Path.GetFileNameWithoutExtension(file);
-                if (!int.TryParse(name, out var key)) continue;
-                if (key < 0 || key >= Key21Layout.KeyCount) continue;
-                try
+                var key = layout.ByMidiName
+                    ? layout.KeyIndexForPitch(int.TryParse(name.TrimStart('m', 'M'), out var midi) ? midi : -1)
+                    : int.TryParse(name, out var button) && button >= 0 && button < layout.KeyCount
+                        ? button
+                        : -1;
+                if (key >= 0 && key < layout.KeyCount)
                 {
-                    samples[key] = LoadSampleBuffer(file);
-                }
-                catch
-                {
-                    // A broken sample should not break the whole instrument.
+                    try
+                    {
+                        samples[key] = LoadSampleBuffer(file);
+                    }
+                    catch
+                    {
+                        // A broken sample should not break the whole instrument.
+                    }
                 }
             }
             EnsureOutput();
         }
     }
 
-    public void PlayKey(int keyIndex, double gain)
+    public void PlayKey(int pitch, double gain)
     {
         lock (gate)
         {
+            var keyIndex = layout.KeyIndexForPitch(pitch);
             if (mixer is null || !samples.TryGetValue(keyIndex, out var buffer)) return;
             var source = new CachedSampleSource(buffer) { Gain = (float)Math.Clamp(gain, 0.05, 1.0) };
             mixer.AddMixerInput(source);
@@ -64,11 +74,12 @@ public sealed class InstrumentPlayer : IDisposable
         }
     }
 
-    public void NoteOff(int keyIndex)
+    public void NoteOff(int pitch)
     {
         lock (gate)
         {
             if (releaseSeconds <= 0) return;
+            var keyIndex = layout.KeyIndexForPitch(pitch);
             if (!activeVoices.TryGetValue(keyIndex, out var voices)) return;
             foreach (var voice in voices)
             {
@@ -119,6 +130,31 @@ public sealed class InstrumentPlayer : IDisposable
         {
         }
         return 0;
+    }
+
+    private static string ReadShape(string folder)
+    {
+        try
+        {
+            var metaPath = Path.Combine(folder, "meta.json");
+            if (!File.Exists(metaPath)) return "";
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(metaPath));
+            return doc.RootElement.TryGetProperty("shape", out var shape) ? shape.GetString() ?? "" : "";
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private static bool DetectMidiNaming(string folder)
+    {
+        foreach (var file in Directory.EnumerateFiles(folder, "*.mp3"))
+        {
+            var name = Path.GetFileName(file);
+            return name.StartsWith('m') || name.StartsWith('M');
+        }
+        return false;
     }
 
     private static float[] LoadSampleBuffer(string file)

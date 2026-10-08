@@ -29,6 +29,7 @@ public sealed class KeyboardVisualization : IMidiVisualization
     private readonly Dictionary<int, List<MidiPlayer.MidiNote>> keyNotes = new();
     private readonly HashSet<int> litKeys = new();
     private double keyWidth = 70;
+    private InstrumentLayout layout = new();
 
     public string Name => "21键键盘";
 
@@ -39,10 +40,11 @@ public sealed class KeyboardVisualization : IMidiVisualization
         this.notes = notes;
         this.duration = duration;
         viewport = owner;
+        layout = App.Instruments.Layout;
         keyNotes.Clear();
         foreach (var note in notes)
         {
-            var key = Key21Layout.KeyIndexForPitch(note.Pitch);
+            var key = layout.KeyIndexForPitch(note.Pitch);
             if (!keyNotes.TryGetValue(key, out var list))
             {
                 list = new List<MidiPlayer.MidiNote>();
@@ -91,9 +93,10 @@ public sealed class KeyboardVisualization : IMidiVisualization
         keyCanvas.Children.Clear();
 
         var (fill, border, text) = ThemeKeys();
-        for (var keyIndex = 0; keyIndex < Key21Layout.KeyCount; keyIndex++)
+        for (var keyIndex = 0; keyIndex < layout.KeyCount; keyIndex++)
         {
-            var (row, column) = Key21Layout.KeyPosition(keyIndex);
+            var row = keyIndex / 7;
+            var column = keyIndex % 7;
             var centerX = column * keyWidth + keyWidth / 2;
             var centerY = row * rowHeight + rowHeight / 2 + 7;
             var diameter = Math.Min(keyWidth - 12, rowHeight - 10);

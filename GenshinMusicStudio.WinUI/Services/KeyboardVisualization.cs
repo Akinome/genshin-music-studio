@@ -90,7 +90,7 @@ public sealed class KeyboardVisualization : IMidiVisualization
         var viewportHeight = SafeHeight();
         var rowHeight = Math.Min((viewportHeight - 20) / 3, keyWidth * 1.2);
         keyCanvas.Width = keyboardWidth;
-        keyCanvas.Height = rowHeight * 3 + 14;
+        keyCanvas.Height = rowHeight * layout.Octaves + 14;
         keyCanvas.Children.Clear();
 
         var (fill, border, text) = ThemeKeys();

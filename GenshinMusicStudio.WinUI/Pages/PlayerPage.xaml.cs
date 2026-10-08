@@ -194,6 +194,7 @@ public sealed partial class PlayerPage : Page
             {
                 visualization.Initialize(RollViewport, notes, duration);
             }
+            KeyboardModeButton.Content = keyboardMode.Name;
         }
         catch (Exception ex)
         {

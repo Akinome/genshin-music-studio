@@ -303,6 +303,7 @@ public sealed partial class PlayerPage : Page
         }
         if (visualization is null) SetMode(waterfallMode);
         else visualization.Initialize(RollViewport, notes, duration);
+        LogState("RenderRoll: " + Path.GetFileName(path));
         TimeText.Text = "0:00 / " + FormatTime(duration);
     }
 
@@ -318,6 +319,23 @@ public sealed partial class PlayerPage : Page
             return;
         }
         mode.Initialize(RollViewport, notes, duration);
+        LogState("SetMode: " + mode.Name);
+    }
+
+    private void LogState(string label)
+    {
+        try
+        {
+            var logDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "GenshinMusicStudio");
+            Directory.CreateDirectory(logDir);
+            File.AppendAllText(Path.Combine(logDir, "crash.log"),
+                $"[{DateTime.Now:HH:mm:ss}] STATE {label}: notes={notes.Count} duration={duration:F2}s viewport={RollViewport.ActualWidth:F0}x{RollViewport.ActualHeight:F0} children={RollViewport.Children.Count}{Environment.NewLine}");
+        }
+        catch
+        {
+        }
     }
 
     private void WaterfallMode_Click(object sender, RoutedEventArgs e) => SetMode(waterfallMode);

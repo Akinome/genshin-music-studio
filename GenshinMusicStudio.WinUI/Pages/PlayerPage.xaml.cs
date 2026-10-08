@@ -176,6 +176,10 @@ public sealed partial class PlayerPage : Page
             await Task.Run(() => App.Instruments.LoadInstrument(folder));
             App.Player.Instrument = App.Instruments;
             App.Instruments.SetDeviceVolume(App.Player.Volume);
+            if (App.Instruments.Layout.IsDrumKit)
+            {
+                SetMode(keyboardMode);
+            }
         }
         catch (Exception ex)
         {

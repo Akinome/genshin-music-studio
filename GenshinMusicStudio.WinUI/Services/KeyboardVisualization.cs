@@ -143,9 +143,12 @@ public sealed class KeyboardVisualization : IMidiVisualization
             Canvas.SetTop(circle, centerY - diameter / 2);
             keyCanvas.Children.Add(circle);
 
+            var labelText = layout.IsDrumKit
+                ? (row == 0 ? "A" : "B") + (column + 1)
+                : Key21Layout.DegreeNames[column];
             var label = new TextBlock
             {
-                Text = Key21Layout.DegreeNames[keyIndex % 7],
+                Text = labelText,
                 FontSize = Math.Max(12, diameter * 0.24),
                 Foreground = text,
                 IsHitTestVisible = false,

@@ -99,7 +99,12 @@ public sealed partial class PlayerPage : Page
             _ = ShowMessageAsync("目录不存在", "文件所在目录在磁盘上不存在。");
             return;
         }
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(folder) { UseShellExecute = true });
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "explorer.exe",
+            Arguments = $"/select,\"{path}\"",
+            UseShellExecute = true,
+        });
     }
 
     private void Play_Click(object sender, RoutedEventArgs e)

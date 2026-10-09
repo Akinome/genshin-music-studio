@@ -87,8 +87,18 @@ public sealed partial class PlayerPage : Page
 
     private void OpenFileLocation_Click(object sender, RoutedEventArgs e)
     {
-        var folder = Path.GetDirectoryName(FilePathBox.Text);
-        if (folder is null || !Directory.Exists(folder)) return;
+        var path = FilePathBox.Text.Trim();
+        if (path.Length == 0)
+        {
+            _ = ShowMessageAsync("没有文件", "请先选择一个 MIDI 文件。");
+            return;
+        }
+        var folder = Path.GetDirectoryName(path);
+        if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
+        {
+            _ = ShowMessageAsync("目录不存在", "文件所在目录在磁盘上不存在。");
+            return;
+        }
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(folder) { UseShellExecute = true });
     }
 

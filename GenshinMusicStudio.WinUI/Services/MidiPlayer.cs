@@ -175,6 +175,49 @@ public sealed class MidiPlayer : IDisposable
 
     public void Dispose() => Stop();
 
+    private IntPtr manualHandle;
+    private bool manualOpened;
+
+    public void ManualNoteOn(int pitch, int velocity = 96)
+    {
+        if (Instrument is not null)
+        {
+            Instrument.PlayKey(pitch, Math.Clamp(velocity / 127.0 * velocityBoost, 0.05, 1.0));
+            return;
+        }
+        lock (gate)
+        {
+            if (!manualOpened)
+            {
+                if (midiOutOpen(out manualHandle, 0, IntPtr.Zero, IntPtr.Zero, 0) != 0)
+                {
+                    manualOpened = false;
+                    return;
+                }
+                manualOpened = true;
+                midiOutShortMsg(manualHandle, 0xC0 | HarpProgram);
+            }
+            var folded = Key21Layout.FoldPitch(pitch);
+            midiOutShortMsg(manualHandle, 0x90 | (folded << 8) | (velocity << 16));
+        }
+    }
+
+    public void ManualNoteOff(int pitch)
+    {
+        if (Instrument is not null)
+        {
+            Instrument.NoteOff(pitch);
+            return;
+        }
+        lock (gate)
+        {
+            if (manualOpened)
+            {
+                midiOutShortMsg(manualHandle, 0x80 | (Key21Layout.FoldPitch(pitch) << 8));
+            }
+        }
+    }
+
     private void PlayLoop()
     {
         var startFrom = playbackStart;

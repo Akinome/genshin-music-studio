@@ -30,6 +30,8 @@ public sealed class KeyboardVisualization : IMidiVisualization
     private readonly HashSet<int> litKeys = new();
     private double keyWidth = 70;
     private InstrumentLayout layout = new();
+    public event Action<int>? KeyPressed;
+    public event Action<int>? KeyReleased;
 
     public string Name => $"{layout.KeyCount}键键盘";
 
@@ -141,6 +143,14 @@ public sealed class KeyboardVisualization : IMidiVisualization
             };
             Canvas.SetLeft(circle, centerX - diameter / 2);
             Canvas.SetTop(circle, centerY - diameter / 2);
+            circle.PointerPressed += (_, args) =>
+            {
+                args.Handled = true;
+                circle.Opacity = 1;
+                KeyPressed?.Invoke(keyIndex);
+            };
+            circle.PointerReleased += (_, args) => KeyReleased?.Invoke(keyIndex);
+            circle.PointerCaptureLost += (_, args) => KeyReleased?.Invoke(keyIndex);
             keyCanvas.Children.Add(circle);
 
             var labelText = layout.IsDrumKit
@@ -279,6 +289,16 @@ public sealed class KeyboardVisualization : IMidiVisualization
         var accent = (Brush)Application.Current.Resources["AccentBlueBrush"];
         SetKeyStyle(keyIndex, accent, accent, true);
         AnimateKeyScale(keyIndex, 1.0, 0.9, 90);
+    }
+
+    public void PressKeyVisual(int keyIndex)
+    {
+        PressKey(keyIndex);
+    }
+
+    public void ReleaseKeyVisual(int keyIndex)
+    {
+        ReleaseKey(keyIndex);
     }
 
     private void ReleaseKey(int keyIndex)

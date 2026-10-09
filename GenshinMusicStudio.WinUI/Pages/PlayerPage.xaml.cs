@@ -2,7 +2,6 @@ using GenshinMusicStudio_WinUI.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
-using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
@@ -27,7 +26,6 @@ public sealed partial class PlayerPage : Page
     private IMidiVisualization? visualization;
     private readonly WaterfallVisualization waterfallMode = new();
     private readonly KeyboardVisualization keyboardMode = new();
-    private readonly HashSet<int> heldKeys = new();
 
     public PlayerPage()
     {
@@ -44,31 +42,6 @@ public sealed partial class PlayerPage : Page
         };
         Loaded += PlayerPage_Loaded;
         Unloaded += PlayerPage_Unloaded;
-        keyboardMode.KeyPressed += OnKeyboardKeyPressed;
-        keyboardMode.KeyReleased += OnKeyboardKeyReleased;
-    }
-
-    private void OnKeyboardKeyPressed(int keyIndex)
-    {
-        if (heldKeys.Add(keyIndex))
-        {
-            App.Player.ManualNoteOn(PitchForKeyIndex(keyIndex));
-        }
-    }
-
-    private void OnKeyboardKeyReleased(int keyIndex)
-    {
-        if (heldKeys.Remove(keyIndex))
-        {
-            App.Player.ManualNoteOff(PitchForKeyIndex(keyIndex));
-        }
-    }
-
-    private int PitchForKeyIndex(int keyIndex)
-    {
-        return App.Instruments.Layout.KeyCount > 0
-            ? App.Instruments.Layout.PitchForKeyIndex(keyIndex)
-            : new InstrumentLayout().PitchForKeyIndex(keyIndex);
     }
 
     private void PlayerPage_Loaded(object sender, RoutedEventArgs e)
@@ -90,54 +63,11 @@ public sealed partial class PlayerPage : Page
             RenderRoll(FilePathBox.Text);
         }
         SetMode(waterfallMode);
-        RollViewport.IsTabStop = true;
-        RollViewport.KeyDown += PlayerPage_KeyDown;
-        RollViewport.KeyUp += PlayerPage_KeyUp;
         if (App.Player.IsPlaying)
         {
             renderTimer?.Start();
         }
         UpdateControls();
-    }
-
-    private void PlayerPage_KeyDown(object sender, KeyRoutedEventArgs e)
-    {
-        if (FocusManager.GetFocusedElement() is TextBox) return;
-        var keyIndex = PhysicalKeyToIndex(e.Key);
-        if (keyIndex < 0) return;
-        if (e.KeyStatus.WasKeyDown || !heldKeys.Add(keyIndex)) return;
-        if (visualization is KeyboardVisualization kb)
-        {
-            kb.PressKeyVisual(keyIndex);
-        }
-        App.Player.ManualNoteOn(PitchForKeyIndex(keyIndex));
-        e.Handled = true;
-    }
-
-    private void PlayerPage_KeyUp(object sender, KeyRoutedEventArgs e)
-    {
-        var keyIndex = PhysicalKeyToIndex(e.Key);
-        if (keyIndex < 0 || !heldKeys.Remove(keyIndex)) return;
-        if (visualization is KeyboardVisualization kb)
-        {
-            kb.ReleaseKeyVisual(keyIndex);
-        }
-        App.Player.ManualNoteOff(PitchForKeyIndex(keyIndex));
-        e.Handled = true;
-    }
-
-    private static readonly string[] KeyboardRows = { "QWERTYU", "ASDFGHJ", "ZXCVBNM" };
-
-    private static int PhysicalKeyToIndex(Windows.System.VirtualKey key)
-    {
-        var letter = key.ToString();
-        if (letter.Length != 1) return -1;
-        for (var row = 0; row < KeyboardRows.Length; row++)
-        {
-            var column = KeyboardRows[row].IndexOf(letter, StringComparison.OrdinalIgnoreCase);
-            if (column >= 0) return row * 7 + column;
-        }
-        return -1;
     }
 
     private void PlayerPage_Unloaded(object sender, RoutedEventArgs e)

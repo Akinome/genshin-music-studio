@@ -146,6 +146,9 @@ public sealed partial class MainWindow : Window
             case "player":
                 NavFrame.Navigate(typeof(PlayerPage));
                 break;
+            case "perform":
+                NavFrame.Navigate(typeof(PerformancePage));
+                break;
             case "environment":
                 NavFrame.Navigate(typeof(EnvironmentPage));
                 break;

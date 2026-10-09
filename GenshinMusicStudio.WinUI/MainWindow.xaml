@@ -67,6 +67,11 @@
                         <FontIcon Glyph="&#xE768;" />
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
+                <NavigationViewItem Content="演奏" Tag="perform">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE7F6;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
                 <NavigationViewItem Content="谱库" Tag="library">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE8F1;" />

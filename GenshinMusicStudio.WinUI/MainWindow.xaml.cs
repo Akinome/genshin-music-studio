@@ -23,7 +23,11 @@ public sealed partial class MainWindow : Window
         SetTitleBar(AppTitleBar);
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
         AppWindow.Resize(new SizeInt32(1280, 800));
-        AppWindow.Move(new PointInt32(320, 140));
+        CenterWindowOnLaunch();
+        if (AppWindow.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.IsAlwaysOnTop = false;
+        }
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
         if (File.Exists(iconPath))
         {
@@ -41,6 +45,14 @@ public sealed partial class MainWindow : Window
         App.Player.VelocityBoost = AppSettings.Load().VelocityBoost ?? 1.5;
         Closed += (_, _) => App.Player.Stop();
         NavFrame.Navigate(typeof(DownloadPage));
+    }
+
+    private void CenterWindowOnLaunch()
+    {
+        var area = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(AppWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest);
+        var x = area.WorkArea.X + Math.Max(0, (area.WorkArea.Width - 1280) / 2);
+        var y = area.WorkArea.Y + Math.Max(0, (area.WorkArea.Height - 800) / 2);
+        AppWindow.Move(new PointInt32(x, y));
     }
 
     private void Player_PlayingChanged(bool playing)

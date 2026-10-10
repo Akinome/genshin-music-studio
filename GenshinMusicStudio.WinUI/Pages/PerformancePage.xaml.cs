@@ -134,7 +134,9 @@ public sealed partial class PerformancePage : Page
     {
         if (heldKeys.Add(keyIndex))
         {
-            App.Player.ManualNoteOn(PitchForKeyIndex(keyIndex));
+            var pitch = PitchForKeyIndex(keyIndex);
+            LogDiag("key press: keyIndex=" + keyIndex + " pitch=" + pitch);
+            App.Player.ManualNoteOn(pitch);
         }
     }
 
@@ -151,6 +153,22 @@ public sealed partial class PerformancePage : Page
         return App.Instruments.Layout.KeyCount > 0
             ? App.Instruments.Layout.PitchForKeyIndex(keyIndex)
             : new InstrumentLayout().PitchForKeyIndex(keyIndex);
+    }
+
+    private void LogDiag(string text)
+    {
+        try
+        {
+            var logDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "GenshinMusicStudio");
+            Directory.CreateDirectory(logDir);
+            File.AppendAllText(Path.Combine(logDir, "crash.log"),
+                $"[{DateTime.Now:HH:mm:ss}] DIAG {text}{Environment.NewLine}");
+        }
+        catch
+        {
+        }
     }
 
     private void PerformancePage_KeyDown(object sender, KeyRoutedEventArgs e)

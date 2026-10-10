@@ -148,11 +148,13 @@ public sealed class KeyboardVisualization : IMidiVisualization
             {
                 args.Handled = true;
                 circle.Opacity = 1;
+                circle.CapturePointer(args.Pointer);
                 PressKeyVisual(capturedIndex);
                 KeyPressed?.Invoke(capturedIndex);
             };
             circle.PointerReleased += (_, args) =>
             {
+                circle.ReleasePointerCapture(args.Pointer);
                 ReleaseKeyVisual(capturedIndex);
                 KeyReleased?.Invoke(capturedIndex);
             };

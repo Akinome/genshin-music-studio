@@ -100,6 +100,7 @@ public sealed class KeyboardVisualization : IMidiVisualization
         {
             var row = keyIndex / columns;
             var column = keyIndex % columns;
+            var capturedIndex = keyIndex;
             var centerX = column * keyWidth + keyWidth / 2;
             var centerY = row * rowHeight + rowHeight / 2 + 7;
             var diameter = Math.Min(keyWidth - 12, rowHeight - 10);
@@ -147,10 +148,10 @@ public sealed class KeyboardVisualization : IMidiVisualization
             {
                 args.Handled = true;
                 circle.Opacity = 1;
-                KeyPressed?.Invoke(keyIndex);
+                KeyPressed?.Invoke(capturedIndex);
             };
-            circle.PointerReleased += (_, args) => KeyReleased?.Invoke(keyIndex);
-            circle.PointerCaptureLost += (_, args) => KeyReleased?.Invoke(keyIndex);
+            circle.PointerReleased += (_, args) => KeyReleased?.Invoke(capturedIndex);
+            circle.PointerCaptureLost += (_, args) => KeyReleased?.Invoke(capturedIndex);
             keyCanvas.Children.Add(circle);
 
             var labelText = layout.IsDrumKit

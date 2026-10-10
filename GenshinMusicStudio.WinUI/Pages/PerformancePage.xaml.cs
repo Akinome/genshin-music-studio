@@ -38,6 +38,8 @@ public sealed partial class PerformancePage : Page
         KeyboardViewport.IsTabStop = true;
         KeyboardViewport.KeyDown += PerformancePage_KeyDown;
         KeyboardViewport.KeyUp += PerformancePage_KeyUp;
+        KeyboardViewport.Tapped += (_, _) => KeyboardViewport.Focus(FocusState.Programmatic);
+        KeyboardViewport.Focus(FocusState.Programmatic);
     }
 
     private void PerformancePage_Unloaded(object sender, RoutedEventArgs e)

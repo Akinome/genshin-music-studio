@@ -1,6 +1,7 @@
 using GenshinMusicStudio_WinUI.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Input;
 
 namespace GenshinMusicStudio_WinUI.Pages;
@@ -9,10 +10,17 @@ public sealed partial class PerformancePage : Page
 {
     private readonly KeyboardVisualization keyboard = new();
     private readonly HashSet<int> heldKeys = new();
+    private DispatcherQueueTimer? focusTimer;
 
     public PerformancePage()
     {
         InitializeComponent();
+        IsTabStop = true;
+        KeyDown += PerformancePage_KeyDown;
+        KeyUp += PerformancePage_KeyUp;
+        focusTimer = DispatcherQueue.CreateTimer();
+        focusTimer.Interval = TimeSpan.FromMilliseconds(150);
+        focusTimer.Tick += (_, _) => KeyboardViewport.Focus(FocusState.Programmatic);
         Loaded += PerformancePage_Loaded;
         Unloaded += PerformancePage_Unloaded;
         keyboard.KeyPressed += OnKeyPressed;
@@ -36,16 +44,16 @@ public sealed partial class PerformancePage : Page
         };
         keyboard.Initialize(KeyboardViewport, Array.Empty<MidiPlayer.MidiNote>(), 0);
         KeyboardViewport.IsTabStop = true;
-        KeyboardViewport.KeyDown += PerformancePage_KeyDown;
-        KeyboardViewport.KeyUp += PerformancePage_KeyUp;
         KeyboardViewport.Tapped += (_, _) => KeyboardViewport.Focus(FocusState.Programmatic);
         KeyboardViewport.Focus(FocusState.Programmatic);
+        focusTimer?.Start();
     }
 
     private void PerformancePage_Unloaded(object sender, RoutedEventArgs e)
     {
-        KeyboardViewport.KeyDown -= PerformancePage_KeyDown;
-        KeyboardViewport.KeyUp -= PerformancePage_KeyUp;
+        focusTimer?.Stop();
+        KeyDown -= PerformancePage_KeyDown;
+        KeyUp -= PerformancePage_KeyUp;
     }
 
     private static readonly Dictionary<string, string> InstrumentNames = new(StringComparer.OrdinalIgnoreCase)

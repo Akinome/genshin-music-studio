@@ -148,10 +148,19 @@ public sealed class KeyboardVisualization : IMidiVisualization
             {
                 args.Handled = true;
                 circle.Opacity = 1;
+                PressKeyVisual(capturedIndex);
                 KeyPressed?.Invoke(capturedIndex);
             };
-            circle.PointerReleased += (_, args) => KeyReleased?.Invoke(capturedIndex);
-            circle.PointerCaptureLost += (_, args) => KeyReleased?.Invoke(capturedIndex);
+            circle.PointerReleased += (_, args) =>
+            {
+                ReleaseKeyVisual(capturedIndex);
+                KeyReleased?.Invoke(capturedIndex);
+            };
+            circle.PointerCaptureLost += (_, args) =>
+            {
+                ReleaseKeyVisual(capturedIndex);
+                KeyReleased?.Invoke(capturedIndex);
+            };
             keyCanvas.Children.Add(circle);
 
             var labelText = layout.IsDrumKit

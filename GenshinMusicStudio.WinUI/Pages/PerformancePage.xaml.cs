@@ -20,6 +20,7 @@ public sealed partial class PerformancePage : Page
         KeyUp += PerformancePage_KeyUp;
         focusTimer = DispatcherQueue.CreateTimer();
         focusTimer.Interval = TimeSpan.FromMilliseconds(150);
+        focusTimer.IsRepeating = false;
         focusTimer.Tick += (_, _) => KeyboardViewport.Focus(FocusState.Programmatic);
         Loaded += PerformancePage_Loaded;
         Unloaded += PerformancePage_Unloaded;

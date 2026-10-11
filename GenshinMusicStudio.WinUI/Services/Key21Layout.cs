@@ -9,6 +9,12 @@ public static class Key21Layout
 
     private static readonly int[] ChromaticToDiatonic = { 0, 2, 2, 4, 4, 5, 7, 7, 9, 9, 11, 11 };
     private static readonly int[] SemitoneToDegree = { 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6 };
+    private static readonly int[] DegreeSemitone = { 0, 2, 4, 5, 7, 9, 11 };
+
+    public static int DegreeToSemitone(int degree)
+    {
+        return degree >= 0 && degree < DegreeSemitone.Length ? DegreeSemitone[degree] : 0;
+    }
 
     public static int FoldPitch(int pitch)
     {
@@ -26,14 +32,21 @@ public static class Key21Layout
         return octave * 7 + degree;
     }
 
-    public static int ButtonNumberForPitch(int pitch)
+    /// <summary>
+    /// Physical QWERTY key label for a pitch, matching the on-screen keyboard:
+    /// the top row plays the highest octave and the bottom row the lowest.
+    /// </summary>
+    public static string PhysicalKeyForPitch(int pitch)
     {
         pitch = FoldPitch(pitch);
         var mapped = ChromaticToDiatonic[pitch % 12];
         var degree = SemitoneToDegree[mapped];
         var octave = Math.Clamp((pitch - LowPitch) / 12, 0, 2);
-        return (2 - octave) * 7 + degree;
+        return PhysicalKeyRows[octave][degree].ToString();
     }
+
+    // Index 0 is the lowest octave; rows mirror the visual keyboard layout.
+    private static readonly string[] PhysicalKeyRows = { "ZXCVBNM", "ASDFGHJ", "QWERTYU" };
 
     public static (int Row, int Column) KeyPosition(int keyIndex)
     {

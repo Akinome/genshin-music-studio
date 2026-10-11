@@ -11,12 +11,16 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private const double PixelsPerSecond = 140;
     private const double RespawnInterval = 0.5;
     private const double HighlightInterval = 0.25;
+    private const double KeyStripHeight = 26;
+    private const double KeyCapWidth = 32;
+    private const double KeyCapGap = 3;
 
     private IReadOnlyList<MidiPlayer.MidiNote> notes = Array.Empty<MidiPlayer.MidiNote>();
     private double duration;
     private double minPitch = 48;
     private double maxPitch = 83;
     private Canvas? canvas;
+    private Canvas? keyStrip;
     private Grid? viewport;
     private TranslateTransform? transform;
     private double renderBase;
@@ -41,6 +45,14 @@ public sealed class WaterfallVisualization : IMidiVisualization
         transform = new TranslateTransform();
         canvas.RenderTransform = transform;
         owner.Children.Add(canvas);
+
+        keyStrip = new Canvas
+        {
+            VerticalAlignment = VerticalAlignment.Bottom,
+            IsHitTestVisible = false,
+        };
+        owner.Children.Add(keyStrip);
+
         var hitLine = new Rectangle
         {
             Height = 3,
@@ -78,14 +90,8 @@ public sealed class WaterfallVisualization : IMidiVisualization
 
     private void RenderWindow(double baseTime)
     {
-        if (canvas is null || viewport is null || transform is null) return;
-        var range = (int)(maxPitch - minPitch);
-        if (range < 35) range = 35;
-        var viewportWidth = viewport.ActualWidth;
-        if (double.IsNaN(viewportWidth) || viewportWidth < 100) viewportWidth = 1100;
-        var viewportHeight = viewport.ActualHeight;
-        if (double.IsNaN(viewportHeight) || viewportHeight < 100) viewportHeight = 420;
-        var keyWidth = Math.Clamp(viewportWidth / (range + 1), 10, 26);
+        if (canvas is null || viewport is null) return;
+        var (range, keyWidth, _, viewportHeight) = LaneMetrics();
         var windowSeconds = viewportHeight / PixelsPerSecond + 1.5;
         var canvasHeight = windowSeconds * PixelsPerSecond;
         canvas.Width = (range + 1) * keyWidth;
@@ -127,18 +133,115 @@ public sealed class WaterfallVisualization : IMidiVisualization
             Canvas.SetLeft(rect, (note.Pitch - minPitch) * keyWidth + 1.5);
             Canvas.SetTop(rect, top);
             canvas.Children.Add(rect);
+
+            if (keyWidth >= 13)
+            {
+                var caption = new TextBlock
+                {
+                    Text = KeyLabelForPitch(note.Pitch),
+                    FontSize = Math.Clamp(keyWidth * 0.52, 8, 12),
+                    Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+                    Opacity = 0.9,
+                    IsHitTestVisible = false,
+                    Tag = note,
+                };
+                caption.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                Canvas.SetLeft(caption, (note.Pitch - minPitch) * keyWidth + keyWidth / 2 - caption.DesiredSize.Width / 2);
+                Canvas.SetTop(caption, top + Math.Max(0, rect.Height - caption.DesiredSize.Height) / 2);
+                canvas.Children.Add(caption);
+            }
+        }
+        RenderKeyStrip();
+    }
+
+    private (int Range, double KeyWidth, double ViewportWidth, double ViewportHeight) LaneMetrics()
+    {
+        var range = (int)(maxPitch - minPitch);
+        if (range < 35) range = 35;
+        var viewportWidth = viewport?.ActualWidth ?? 0;
+        if (double.IsNaN(viewportWidth) || viewportWidth < 100) viewportWidth = 1100;
+        var viewportHeight = viewport?.ActualHeight ?? 0;
+        if (double.IsNaN(viewportHeight) || viewportHeight < 100) viewportHeight = 420;
+        return (range, Math.Clamp(viewportWidth / (range + 1), 10, 26), viewportWidth, viewportHeight);
+    }
+
+    private void RenderKeyStrip()
+    {
+        if (keyStrip is null || canvas is null) return;
+        var (_, _, viewportWidth, _) = LaneMetrics();
+        keyStrip.Width = viewportWidth;
+        keyStrip.Height = KeyStripHeight;
+        keyStrip.Children.Clear();
+
+        var total = 21 * KeyCapWidth + 20 * KeyCapGap;
+        var startX = Math.Max(8, (viewportWidth - total) / 2);
+        var background = new Rectangle
+        {
+            Width = total + 16,
+            Height = KeyStripHeight,
+            Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(150, 24, 28, 36)),
+            RadiusX = 7,
+            RadiusY = 7,
+        };
+        Canvas.SetLeft(background, startX - 8);
+        Canvas.SetTop(background, 0);
+        keyStrip.Children.Add(background);
+
+        for (var button = 0; button < 21; button++)
+        {
+            var pitch = PitchForButton(button);
+            var cap = new Border
+            {
+                Width = KeyCapWidth,
+                Height = KeyStripHeight - 6,
+                CornerRadius = new CornerRadius(4),
+                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(210, 58, 64, 78)),
+                Child = new TextBlock
+                {
+                    Text = Key21Layout.PhysicalKeyForPitch(pitch),
+                    FontSize = 12,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                },
+            };
+            Canvas.SetLeft(cap, startX + button * (KeyCapWidth + KeyCapGap));
+            Canvas.SetTop(cap, 3);
+            keyStrip.Children.Add(cap);
         }
     }
+
+    private static int PitchForButton(int button)
+    {
+        var octave = button / 7;
+        var degree = button % 7;
+        return 48 + octave * 12 + Key21Layout.DegreeToSemitone(degree);
+    }
+
+    private static string KeyLabelForPitch(int pitch)
+        => Key21Layout.PhysicalKeyForPitch(pitch);
 
     private void HighlightPlayingNotes(double position)
     {
         if (canvas is null) return;
         var normal = (Brush)Application.Current.Resources["AccentBlueBrush"];
         var active = new SolidColorBrush(Microsoft.UI.Colors.White);
-        foreach (var child in canvas.Children.OfType<Rectangle>())
+        var activeText = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 40, 44, 54));
+        var normalText = new SolidColorBrush(Microsoft.UI.Colors.White);
+        foreach (var child in canvas.Children)
         {
-            if (child.Tag is not MidiPlayer.MidiNote note) continue;
-            child.Fill = position >= note.Start - 0.02 && position <= note.End ? active : normal;
+            if (child is not FrameworkElement element || element.Tag is not MidiPlayer.MidiNote note) continue;
+            var lit = position >= note.Start - 0.02 && position <= note.End;
+            switch (element)
+            {
+                case Rectangle rect:
+                    rect.Fill = lit ? active : normal;
+                    break;
+                case TextBlock caption:
+                    caption.Foreground = lit ? activeText : normalText;
+                    break;
+            }
         }
     }
 }

@@ -17,6 +17,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private const double HighlightInterval = 0.25;
     private const double MinWhiteKeyWidth = 11;
     private const double MaxWhiteKeyWidth = 40;
+    private const double FixedWhiteKeyWidth = 24;
     private const double BlackKeyWidthRatio = 0.62;
     private const double BlackKeyHeightRatio = 0.62;
     private const int DefaultLowPitch = 48;
@@ -42,8 +43,10 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private double maxPitch = DefaultHighPitch;
     private double whiteKeyWidth = 24;
     private double keyboardHeight = 48;
+    private Canvas? contentHost;
     private Canvas? canvas;
     private Canvas? keybed;
+    private TranslateTransform? keybedCounter;
     private ScrollViewer? scroller;
     private Grid? viewport;
     private TranslateTransform? transform;
@@ -82,18 +85,24 @@ public sealed class WaterfallVisualization : IMidiVisualization
         };
         owner.Children.Add(scroller);
 
-        canvas = new Canvas { VerticalAlignment = VerticalAlignment.Bottom };
+        contentHost = new Canvas();
+        scroller.Content = contentHost;
+
+        // Notes scroll vertically inside the host.
+        canvas = new Canvas();
         transform = new TranslateTransform();
         canvas.RenderTransform = transform;
-        scroller.Content = canvas;
+        contentHost.Children.Add(canvas);
 
-        // The keybed lives outside the scroller so it never moves.
+        // The keybed shares the host so it scrolls horizontally with the notes,
+        // and carries an inverse vertical offset so it stays pinned.
         keybed = new Canvas
         {
-            VerticalAlignment = VerticalAlignment.Bottom,
             IsHitTestVisible = false,
         };
-        owner.Children.Add(keybed);
+        keybedCounter = new TranslateTransform();
+        keybed.RenderTransform = keybedCounter;
+        contentHost.Children.Add(keybed);
 
         renderBase = 0;
         RenderWindow(0);
@@ -124,6 +133,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
             RenderWindow(renderBase);
         }
         transform.Y = (position - renderBase) * PixelsPerSecond;
+        if (keybedCounter is not null) keybedCounter.Y = -transform.Y;
         if (position - lastHighlight >= HighlightInterval)
         {
             lastHighlight = position;
@@ -159,16 +169,29 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private void RenderWindow(double baseTime)
     {
         if (canvas is null) return;
+        var scrollOffset = scroller?.HorizontalOffset ?? 0;
         var viewportWidth = SafeWidth();
         var viewportHeight = SafeHeight();
         var contentWidth = GetContentWidth(viewportWidth);
         var canvasWidth = Math.Max(viewportWidth, contentWidth);
         var noteLeft = (viewportWidth - contentWidth) / 2;
         var canvasHeight = viewportHeight;
-        var windowSeconds = canvasHeight / PixelsPerSecond;
+        // Notes stop at the top edge of the keybed, so that edge is the hit line.
+        var hitY = canvasHeight - keyboardHeight;
+        var windowSeconds = hitY / PixelsPerSecond;
 
-        canvas.Width = canvasWidth;
+        if (contentHost is not null)
+        {
+            if (Math.Abs(contentHost.Width - canvasWidth) > 0.5) contentHost.Width = canvasWidth;
+            contentHost.Height = canvasHeight;
+        }
+        if (Math.Abs(canvas.Width - canvasWidth) > 0.5) canvas.Width = canvasWidth;
         canvas.Height = canvasHeight;
+        if (keybed is not null)
+        {
+            keybed.Width = canvasWidth;
+            keybed.Height = canvasHeight;
+        }
         canvas.Children.Clear();
 
         var laneBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(24, 128, 128, 128));
@@ -191,8 +214,8 @@ public sealed class WaterfallVisualization : IMidiVisualization
         {
             if (note.End < baseTime - 0.1) continue;
             if (note.Start > baseTime + windowSeconds) continue;
-            var top = canvasHeight - (note.End - baseTime) * PixelsPerSecond;
-            if (top > canvasHeight) continue;
+            var top = hitY - (note.End - baseTime) * PixelsPerSecond;
+            if (top > hitY) continue;
             var rect = new Rectangle
             {
                 Width = Math.Max(3, LaneWidth(note.Pitch) - 3),
@@ -208,12 +231,16 @@ public sealed class WaterfallVisualization : IMidiVisualization
             canvas.Children.Add(rect);
         }
 
+        if (scroller is not null && scrollOffset > 0)
+        {
+            scroller.ChangeView(scrollOffset, null, null, true);
+        }
     }
 
     /// <summary>
-    /// Draws the keybed with the same lane geometry as the notes. The key
-    /// coordinates are screen-relative, and the inverse transform keeps them
-    /// pinned at the bottom of the viewport.
+    /// Draws the keybed at the hit line inside the shared scroll host. A counter
+    /// transform cancels the note layer's vertical scroll, so the keybed stays
+    /// pinned while still scrolling sideways together with the notes.
     /// </summary>
     private void RenderKeybed()
     {
@@ -221,11 +248,14 @@ public sealed class WaterfallVisualization : IMidiVisualization
         var viewportWidth = SafeWidth();
         var viewportHeight = SafeHeight();
         var contentWidth = GetContentWidth(viewportWidth);
-        var left = (viewportWidth - contentWidth) / 2;
+        var canvasWidth = Math.Max(viewportWidth, contentWidth);
+        var left = contentWidth <= viewportWidth ? (viewportWidth - contentWidth) / 2 : 0;
         keyboardHeight = Math.Clamp(whiteKeyWidth * 2.4, 28, 58);
+        var top = viewportHeight - keyboardHeight;
+        if (keybedCounter is not null) keybedCounter.Y = -(transform?.Y ?? 0);
 
-        keybed.Width = viewportWidth;
-        keybed.Height = keyboardHeight;
+        keybed.Width = canvasWidth;
+        keybed.Height = viewportHeight;
         keybed.Children.Clear();
         keyRects.Clear();
 
@@ -239,7 +269,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
             Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 236, 236, 240)),
         };
         Canvas.SetLeft(backing, left);
-        Canvas.SetTop(backing, 0);
+        Canvas.SetTop(backing, top);
         keybed.Children.Add(backing);
 
         for (var pitch = low; pitch <= high; pitch++)
@@ -255,7 +285,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
                 Tag = pitch,
             };
             Canvas.SetLeft(rect, left + PitchToX(pitch) + 0.5);
-            Canvas.SetTop(rect, 0);
+            Canvas.SetTop(rect, top);
             keybed.Children.Add(rect);
             keyRects[pitch] = rect;
         }
@@ -276,12 +306,12 @@ public sealed class WaterfallVisualization : IMidiVisualization
                 Tag = pitch,
             };
             Canvas.SetLeft(rect, centerX - blackWidth / 2);
-            Canvas.SetTop(rect, 0);
+            Canvas.SetTop(rect, top);
             keybed.Children.Add(rect);
             keyRects[pitch] = rect;
         }
 
-        RenderKeyLabels(left, 0, blackHeight);
+        RenderKeyLabels(left, top, blackHeight);
     }
 
     /// <summary>Sharp names sit on the black keys, natural names at the bottom of white keys.</summary>
@@ -384,13 +414,10 @@ public sealed class WaterfallVisualization : IMidiVisualization
     {
         var low = (int)Math.Floor(minPitch);
         var high = (int)Math.Ceiling(maxPitch);
-        var whiteCount = 0;
-        for (var pitch = low; pitch <= high; pitch++)
-        {
-            if (!IsSharp(pitch)) whiteCount++;
-        }
-        if (whiteCount < 1) whiteCount = 1;
-        whiteKeyWidth = Math.Clamp(viewportWidth / whiteCount, MinWhiteKeyWidth, MaxWhiteKeyWidth);
+        // A fixed key width keeps the keyboard identical no matter which sheet
+        // is open; wider ranges simply extend the content and scroll.
+        whiteKeyWidth = FixedWhiteKeyWidth;
+        keyboardHeight = Math.Clamp(whiteKeyWidth * 2.4, 28, 58);
         var width = 0.0;
         for (var pitch = low; pitch <= high; pitch++)
         {

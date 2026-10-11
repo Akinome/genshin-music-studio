@@ -69,15 +69,13 @@ public sealed class InstrumentPlayer : IDisposable
             if (mixer is null || !samples.TryGetValue(keyIndex, out var buffer)) return;
             var source = new CachedSampleSource(buffer) { Gain = (float)Math.Clamp(gain, 0.05, 1.0) };
             mixer.AddMixerInput(source);
-            if (releaseSeconds > 0)
+
+            if (!activeVoices.TryGetValue(keyIndex, out var voices))
             {
-                if (!activeVoices.TryGetValue(keyIndex, out var voices))
-                {
-                    voices = new List<CachedSampleSource>();
-                    activeVoices[keyIndex] = voices;
-                }
-                voices.Add(source);
+                voices = new List<CachedSampleSource>();
+                activeVoices[keyIndex] = voices;
             }
+            voices.Add(source);
         }
     }
 
@@ -96,7 +94,7 @@ public sealed class InstrumentPlayer : IDisposable
         }
     }
 
-    public void ReleaseAll()
+    public void ReleaseAll(double fadeSeconds = 0.06)
     {
         lock (gate)
         {
@@ -104,7 +102,7 @@ public sealed class InstrumentPlayer : IDisposable
             {
                 foreach (var voice in pair.Value)
                 {
-                    if (releaseSeconds > 0) voice.StartFade(releaseSeconds);
+                    voice.StartFade(Math.Clamp(fadeSeconds, 0.02, 2.0));
                 }
                 pair.Value.Clear();
             }

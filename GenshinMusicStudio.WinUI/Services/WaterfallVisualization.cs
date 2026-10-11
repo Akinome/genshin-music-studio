@@ -83,6 +83,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             ZoomMode = ZoomMode.Disabled,
         };
+        scroller.ViewChanged += (_, _) => SyncKeybedPan();
         owner.Children.Add(scroller);
 
         contentHost = new Canvas();
@@ -94,15 +95,16 @@ public sealed class WaterfallVisualization : IMidiVisualization
         canvas.RenderTransform = transform;
         contentHost.Children.Add(canvas);
 
-        // The keybed shares the host so it scrolls horizontally with the notes,
-        // and carries an inverse vertical offset so it stays pinned.
+        // The keybed sits outside the scroller so it can never move vertically;
+        // it follows horizontal scrolling via its own offset instead.
         keybed = new Canvas
         {
+            VerticalAlignment = VerticalAlignment.Bottom,
             IsHitTestVisible = false,
         };
         keybedCounter = new TranslateTransform();
         keybed.RenderTransform = keybedCounter;
-        contentHost.Children.Add(keybed);
+        owner.Children.Add(keybed);
 
         renderBase = 0;
         RenderWindow(0);
@@ -133,7 +135,6 @@ public sealed class WaterfallVisualization : IMidiVisualization
             RenderWindow(renderBase);
         }
         transform.Y = (position - renderBase) * PixelsPerSecond;
-        if (keybedCounter is not null) keybedCounter.Y = -transform.Y;
         if (position - lastHighlight >= HighlightInterval)
         {
             lastHighlight = position;
@@ -174,7 +175,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
         var viewportHeight = SafeHeight();
         var contentWidth = GetContentWidth(viewportWidth);
         var canvasWidth = Math.Max(viewportWidth, contentWidth);
-        var noteLeft = (viewportWidth - contentWidth) / 2;
+        var noteLeft = contentWidth <= viewportWidth ? (viewportWidth - contentWidth) / 2 : 0;
         var canvasHeight = viewportHeight;
         // Notes stop at the top edge of the keybed, so that edge is the hit line.
         var hitY = canvasHeight - keyboardHeight;
@@ -189,8 +190,8 @@ public sealed class WaterfallVisualization : IMidiVisualization
         canvas.Height = canvasHeight;
         if (keybed is not null)
         {
-            keybed.Width = canvasWidth;
-            keybed.Height = canvasHeight;
+            keybed.Width = viewportWidth;
+            keybed.Height = keyboardHeight;
         }
         canvas.Children.Clear();
 
@@ -237,10 +238,18 @@ public sealed class WaterfallVisualization : IMidiVisualization
         }
     }
 
+    /// <summary>Keeps the keybed aligned with the horizontally scrolled sheet.</summary>
+    private void SyncKeybedPan()
+    {
+        if (keybedCounter is null) return;
+        keybedCounter.X = -(scroller?.HorizontalOffset ?? 0);
+        keybedCounter.Y = 0;
+    }
+
     /// <summary>
-    /// Draws the keybed at the hit line inside the shared scroll host. A counter
-    /// transform cancels the note layer's vertical scroll, so the keybed stays
-    /// pinned while still scrolling sideways together with the notes.
+    /// Draws the keybed at the bottom of the viewport. It lives outside the
+    /// scroller so it never moves vertically, and mirrors the horizontal scroll
+    /// offset so it stays lined up with the notes.
     /// </summary>
     private void RenderKeybed()
     {
@@ -248,14 +257,13 @@ public sealed class WaterfallVisualization : IMidiVisualization
         var viewportWidth = SafeWidth();
         var viewportHeight = SafeHeight();
         var contentWidth = GetContentWidth(viewportWidth);
-        var canvasWidth = Math.Max(viewportWidth, contentWidth);
         var left = contentWidth <= viewportWidth ? (viewportWidth - contentWidth) / 2 : 0;
         keyboardHeight = Math.Clamp(whiteKeyWidth * 2.4, 28, 58);
-        var top = viewportHeight - keyboardHeight;
-        if (keybedCounter is not null) keybedCounter.Y = -(transform?.Y ?? 0);
+        const double top = 0;
+        SyncKeybedPan();
 
-        keybed.Width = canvasWidth;
-        keybed.Height = viewportHeight;
+        keybed.Width = viewportWidth;
+        keybed.Height = keyboardHeight;
         keybed.Children.Clear();
         keyRects.Clear();
 

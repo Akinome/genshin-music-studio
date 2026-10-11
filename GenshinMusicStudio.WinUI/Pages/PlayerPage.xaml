@@ -24,7 +24,7 @@
                 <Grid RowSpacing="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="420" />
+                        <RowDefinition Height="320" />
                     </Grid.RowDefinitions>
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <TextBlock Text="谱面" FontWeight="SemiBold" VerticalAlignment="Center" />

@@ -6,10 +6,9 @@ using Microsoft.UI.Xaml.Shapes;
 namespace GenshinMusicStudio_WinUI.Services;
 
 /// <summary>
-/// Falling-note view with a standard piano keybed. Lanes follow real keyboard
-/// geometry: seven wide white keys per octave with narrower black keys in the
-/// gaps, and the keybed is drawn into the same scrolling canvas as the notes so
-/// every falling note lands exactly on the key that plays it.
+/// Falling-note view with a piano keybed pinned to the bottom. The keybed is
+/// drawn inside the note canvas but carries an inverse transform, so it stays
+/// fixed on screen while the notes scroll past it.
 /// </summary>
 public sealed class WaterfallVisualization : IMidiVisualization
 {
@@ -18,17 +17,21 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private const double HighlightInterval = 0.25;
     private const double MinWhiteKeyWidth = 11;
     private const double MaxWhiteKeyWidth = 40;
-    private const double BlackKeyWidthRatio = 0.6;
+    private const double BlackKeyWidthRatio = 0.62;
     private const double BlackKeyHeightRatio = 0.62;
     private const int DefaultLowPitch = 48;
     private const int DefaultHighPitch = 83;
 
-    private static readonly Windows.UI.Color WhiteKeyFill = Windows.UI.Color.FromArgb(255, 247, 248, 251);
-    private static readonly Windows.UI.Color WhiteKeyBorder = Windows.UI.Color.FromArgb(255, 186, 194, 208);
-    private static readonly Windows.UI.Color BlackKeyFill = Windows.UI.Color.FromArgb(255, 30, 34, 44);
-    private static readonly Windows.UI.Color BlackKeyBorder = Windows.UI.Color.FromArgb(255, 12, 15, 22);
+    private static readonly Windows.UI.Color WhiteKeyFill = Windows.UI.Color.FromArgb(255, 242, 242, 245);
+    private static readonly Windows.UI.Color WhiteKeyBorder = Windows.UI.Color.FromArgb(255, 172, 172, 180);
+    private static readonly Windows.UI.Color WhiteKeyText = Windows.UI.Color.FromArgb(255, 46, 46, 52);
+    private static readonly Windows.UI.Color BlackKeyFill = Windows.UI.Color.FromArgb(255, 8, 8, 10);
+    private static readonly Windows.UI.Color BlackKeyBorder = Windows.UI.Color.FromArgb(255, 0, 0, 0);
+    private static readonly Windows.UI.Color BlackKeyText = Windows.UI.Color.FromArgb(255, 236, 146, 46);
     private static readonly Windows.UI.Color PressedWhite = Windows.UI.Color.FromArgb(255, 232, 163, 61);
-    private static readonly Windows.UI.Color PressedBlack = Windows.UI.Color.FromArgb(255, 198, 132, 36);
+    private static readonly Windows.UI.Color PressedBlack = Windows.UI.Color.FromArgb(255, 120, 78, 20);
+
+    private static readonly string[] NoteNames = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
     private IReadOnlyList<MidiPlayer.MidiNote> notes = Array.Empty<MidiPlayer.MidiNote>();
     private readonly Dictionary<int, List<MidiPlayer.MidiNote>> notesByPitch = new();
@@ -40,6 +43,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private double whiteKeyWidth = 24;
     private double keyboardHeight = 48;
     private Canvas? canvas;
+    private Canvas? keybed;
     private Grid? viewport;
     private TranslateTransform? transform;
     private double renderBase;
@@ -66,10 +70,16 @@ public sealed class WaterfallVisualization : IMidiVisualization
         }
 
         owner.Children.Clear();
+
         canvas = new Canvas { VerticalAlignment = VerticalAlignment.Bottom };
         transform = new TranslateTransform();
         canvas.RenderTransform = transform;
         owner.Children.Add(canvas);
+
+        // The keybed sits in the same canvas but with its own inverse offset so
+        // it never moves while the note layer scrolls.
+        keybed = new Canvas { IsHitTestVisible = false };
+        owner.Children.Add(keybed);
 
         renderBase = 0;
         RenderWindow(0);
@@ -82,10 +92,12 @@ public sealed class WaterfallVisualization : IMidiVisualization
         maxPitch = DefaultHighPitch;
         renderBase = 0;
         if (transform is not null) transform.Y = 0;
+        var viewportWidth = SafeWidth();
+        var contentWidth = GetContentWidth(viewportWidth);
+        canvas.Width = Math.Max(viewportWidth, contentWidth);
+        canvas.Height = SafeHeight();
         canvas.Children.Clear();
-        keyRects.Clear();
-        pressedKeys.Clear();
-        RenderWindow(0);
+        RenderKeybed();
     }
 
     public void Update(double position)
@@ -135,18 +147,16 @@ public sealed class WaterfallVisualization : IMidiVisualization
         var viewportHeight = SafeHeight();
         var contentWidth = GetContentWidth(viewportWidth);
         var canvasWidth = Math.Max(viewportWidth, contentWidth);
-        var left = (canvasWidth - contentWidth) / 2;
+        var noteLeft = (viewportWidth - contentWidth) / 2;
         var canvasHeight = viewportHeight;
         var windowSeconds = canvasHeight / PixelsPerSecond;
 
         canvas.Width = canvasWidth;
         canvas.Height = canvasHeight;
         canvas.Children.Clear();
-        keyRects.Clear();
-        pressedKeys.Clear();
 
-        var laneBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(26, 128, 128, 128));
-        var landmarkBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(55, 128, 128, 128));
+        var laneBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(24, 128, 128, 128));
+        var landmarkBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(52, 128, 128, 128));
         for (var pitch = (int)minPitch; pitch <= (int)maxPitch; pitch++)
         {
             var line = new Rectangle
@@ -155,7 +165,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
                 Height = canvasHeight,
                 Fill = pitch % 12 == 0 ? landmarkBrush : laneBrush,
             };
-            Canvas.SetLeft(line, left + PitchToX(pitch) + LaneWidth(pitch) - 1);
+            Canvas.SetLeft(line, noteLeft + PitchToX(pitch) + LaneWidth(pitch) - 1);
             Canvas.SetTop(line, 0);
             canvas.Children.Add(line);
         }
@@ -177,50 +187,63 @@ public sealed class WaterfallVisualization : IMidiVisualization
                 Opacity = 0.88,
                 Tag = note,
             };
-            Canvas.SetLeft(rect, left + PitchToX(note.Pitch) + 1.5);
+            Canvas.SetLeft(rect, noteLeft + PitchToX(note.Pitch) + 1.5);
             Canvas.SetTop(rect, top);
             canvas.Children.Add(rect);
         }
 
-        DrawKeyboard(left, canvasHeight);
+        RenderKeybed();
     }
 
-    /// <summary>Paints the piano keybed at the bottom of the same canvas.</summary>
-    private void DrawKeyboard(double left, double canvasHeight)
+    /// <summary>
+    /// Draws the keybed with the same lane geometry as the notes. The key
+    /// coordinates are screen-relative, and the inverse transform keeps them
+    /// pinned at the bottom of the viewport.
+    /// </summary>
+    private void RenderKeybed()
     {
-        if (canvas is null) return;
-        keyboardHeight = Math.Clamp(whiteKeyWidth * 2.2, 26, 54);
-        var top = canvasHeight - keyboardHeight;
+        if (keybed is null) return;
+        var viewportWidth = SafeWidth();
+        var viewportHeight = SafeHeight();
+        var contentWidth = GetContentWidth(viewportWidth);
+        var left = (viewportWidth - contentWidth) / 2;
+        keyboardHeight = Math.Clamp(whiteKeyWidth * 2.4, 28, 58);
+        var top = viewportHeight - keyboardHeight;
+
+        keybed.Width = viewportWidth;
+        keybed.Height = viewportHeight;
+        keybed.Children.Clear();
+        keyRects.Clear();
+        pressedKeys.Clear();
+
         var low = (int)Math.Floor(minPitch);
         var high = (int)Math.Ceiling(maxPitch);
 
         var backing = new Rectangle
         {
-            Width = GetContentWidth(SafeWidth()),
+            Width = contentWidth,
             Height = keyboardHeight,
-            Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 22, 26, 34)),
+            Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 236, 236, 240)),
         };
         Canvas.SetLeft(backing, left);
         Canvas.SetTop(backing, top);
-        canvas.Children.Add(backing);
+        keybed.Children.Add(backing);
 
         for (var pitch = low; pitch <= high; pitch++)
         {
             if (IsSharp(pitch)) continue;
             var rect = new Rectangle
             {
-                Width = Math.Max(3, whiteKeyWidth - 1.5),
-                Height = keyboardHeight - 2,
-                RadiusX = 2,
-                RadiusY = 2,
+                Width = Math.Max(3, whiteKeyWidth - 1),
+                Height = keyboardHeight,
                 Fill = new SolidColorBrush(WhiteKeyFill),
                 Stroke = new SolidColorBrush(WhiteKeyBorder),
-                StrokeThickness = 1.1,
+                StrokeThickness = 1,
                 Tag = pitch,
             };
-            Canvas.SetLeft(rect, left + PitchToX(pitch) + 0.75);
-            Canvas.SetTop(rect, top + 1);
-            canvas.Children.Add(rect);
+            Canvas.SetLeft(rect, left + PitchToX(pitch) + 0.5);
+            Canvas.SetTop(rect, top);
+            keybed.Children.Add(rect);
             keyRects[pitch] = rect;
         }
 
@@ -234,17 +257,52 @@ public sealed class WaterfallVisualization : IMidiVisualization
             {
                 Width = blackWidth,
                 Height = blackHeight,
-                RadiusX = 2,
-                RadiusY = 2,
                 Fill = new SolidColorBrush(BlackKeyFill),
                 Stroke = new SolidColorBrush(BlackKeyBorder),
-                StrokeThickness = 1.1,
+                StrokeThickness = 1,
                 Tag = pitch,
             };
             Canvas.SetLeft(rect, centerX - blackWidth / 2);
             Canvas.SetTop(rect, top);
-            canvas.Children.Add(rect);
+            keybed.Children.Add(rect);
             keyRects[pitch] = rect;
+        }
+
+        RenderKeyLabels(left, top, blackHeight);
+    }
+
+    /// <summary>Sharp names sit on the black keys, natural names at the bottom of white keys.</summary>
+    private void RenderKeyLabels(double left, double top, double blackHeight)
+    {
+        if (keybed is null) return;
+        var fontSize = Math.Clamp(whiteKeyWidth * 0.3, 8, 12);
+        var low = (int)Math.Floor(minPitch);
+        var high = (int)Math.Ceiling(maxPitch);
+
+        for (var pitch = low; pitch <= high; pitch++)
+        {
+            var label = new TextBlock
+            {
+                Text = NoteName(pitch),
+                FontSize = fontSize,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(IsSharp(pitch) ? BlackKeyText : WhiteKeyText),
+                IsHitTestVisible = false,
+            };
+            label.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+            if (IsSharp(pitch))
+            {
+                var centerX = left + BlackKeyCenterX(pitch);
+                Canvas.SetLeft(label, centerX - label.DesiredSize.Width / 2);
+                Canvas.SetTop(label, top + Math.Max(1, (blackHeight - label.DesiredSize.Height) / 2));
+            }
+            else
+            {
+                var centerX = left + PitchToX(pitch) + whiteKeyWidth / 2;
+                Canvas.SetLeft(label, centerX - label.DesiredSize.Width / 2);
+                Canvas.SetTop(label, top + keyboardHeight - label.DesiredSize.Height - 2);
+            }
+            keybed.Children.Add(label);
         }
     }
 
@@ -361,6 +419,12 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private static bool IsSharp(int pitch)
     {
         return ((pitch % 12) + 12) % 12 is 1 or 3 or 6 or 8 or 10;
+    }
+
+    private static string NoteName(int pitch)
+    {
+        var pc = ((pitch % 12) + 12) % 12;
+        return NoteNames[pc] + (pitch / 12 - 1);
     }
 
     private double SafeWidth()

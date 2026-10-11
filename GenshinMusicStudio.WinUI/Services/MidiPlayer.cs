@@ -172,6 +172,9 @@ public sealed class MidiPlayer : IDisposable
             current.Join(1500);
         }
         Instrument?.ReleaseAll();
+        // Silence the Windows synth too, otherwise its held notes keep ringing
+        // and stack up once playback resumes.
+        CloseSynthesizer();
         PlayingChanged?.Invoke(false);
     }
 
@@ -211,13 +214,24 @@ public sealed class MidiPlayer : IDisposable
     {
         lock (gate)
         {
-            if (!opened) return;
-            for (var note = 0; note < 128; note++)
+            if (opened)
             {
-                midiOutShortMsg(handle, 0x80 | (note << 8));
+                for (var note = 0; note < 128; note++)
+                {
+                    midiOutShortMsg(handle, 0x80 | (note << 8));
+                }
+                midiOutClose(handle);
+                opened = false;
             }
-            midiOutClose(handle);
-            opened = false;
+            if (manualOpened)
+            {
+                for (var note = 0; note < 128; note++)
+                {
+                    midiOutShortMsg(manualHandle, 0x80 | (note << 8));
+                }
+                midiOutClose(manualHandle);
+                manualOpened = false;
+            }
         }
     }
 

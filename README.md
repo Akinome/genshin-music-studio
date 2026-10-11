@@ -38,9 +38,13 @@ Genshin Music Studio 是一个 WinUI 3 桌面应用，用于：
 |---|---|
 | ![链接一键处理](docs/images/main.png) | ![本地文件](docs/images/local.png) |
 
-| 环境与安装 | 谱库与模型评估 |
+| 播放 | 演奏 |
 |---|---|
-| ![环境与安装](docs/images/environment.png) | ![谱库](docs/images/library.png) |
+| ![播放](docs/images/player.png) | ![演奏](docs/images/performance.png) |
+
+| 谱库与模型评估 | 环境与安装 |
+|---|---|
+| ![谱库](docs/images/library.png) | ![环境与安装](docs/images/environment.png) |
 
 ## 应用内 B 站搜索
 

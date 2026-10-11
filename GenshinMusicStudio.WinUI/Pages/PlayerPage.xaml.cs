@@ -22,7 +22,9 @@ public sealed partial class PlayerPage : Page
     private double renderBase;
     private double lastUiUpdate;
     private double lastHighlight;
+    private double lastKeyAnimation;
     private DispatcherQueueTimer? renderTimer;
+    private DispatcherQueueTimer? keyTimer;
     private IMidiVisualization? visualization;
     private readonly WaterfallVisualization waterfallMode = new();
     private readonly KeyboardVisualization keyboardMode = new();
@@ -33,6 +35,9 @@ public sealed partial class PlayerPage : Page
         renderTimer = DispatcherQueue.CreateTimer();
         renderTimer.Interval = TimeSpan.FromMilliseconds(16);
         renderTimer.Tick += (_, _) => OnFrame();
+        keyTimer = DispatcherQueue.CreateTimer();
+        keyTimer.Interval = TimeSpan.FromMilliseconds(33);
+        keyTimer.Tick += (_, _) => OnKeyFrame();
         RollViewport.SizeChanged += (_, args) =>
         {
             RollViewport.Clip = new RectangleGeometry
@@ -73,14 +78,14 @@ public sealed partial class PlayerPage : Page
         SetMode(waterfallMode);
         if (App.Player.IsPlaying)
         {
-            renderTimer?.Start();
+            StartTimers();
         }
         UpdateControls();
     }
 
     private void PlayerPage_Unloaded(object sender, RoutedEventArgs e)
     {
-        renderTimer?.Stop();
+        StopTimers();
         App.Player.PlayingChanged -= Player_PlayingChanged;
         App.Player.ProgressChanged -= Player_ProgressChanged;
     }
@@ -140,7 +145,7 @@ public sealed partial class PlayerPage : Page
         App.Player.Play(new[] { path });
         if (visualization is null) SetMode(waterfallMode);
         else visualization.Reset();
-        renderTimer?.Start();
+        StartTimers();
     }
 
     private void Stop_Click(object sender, RoutedEventArgs e) => App.Player.Stop();
@@ -261,7 +266,7 @@ public sealed partial class PlayerPage : Page
         var path = FilePathBox.Text.Trim();
         if (path.Length == 0 || !File.Exists(path)) return;
         App.Player.Play(new[] { path }, null, position);
-        renderTimer?.Start();
+        StartTimers();
     }
 
     private void VolumeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
@@ -292,15 +297,15 @@ public sealed partial class PlayerPage : Page
             UpdateControls();
             if (playing)
             {
-                renderTimer?.Start();
+                StartTimers();
             }
             else if (App.Player.IsPaused)
             {
-                renderTimer?.Stop();
+                StopTimers();
             }
             else if (!App.Player.IsPlaying)
             {
-                renderTimer?.Stop();
+                StopTimers();
                 visualization?.Reset();
             }
         });
@@ -329,6 +334,27 @@ public sealed partial class PlayerPage : Page
                 PlayProgress.Value = duration > 0 ? Math.Clamp(position / duration * 100, 0, 100) : 0;
             });
         }
+    }
+
+    private void OnKeyFrame()
+    {
+        if (!App.Player.IsPlaying) return;
+        var position = App.Player.CurrentPosition;
+        if (position - lastKeyAnimation < 0.033) return;
+        lastKeyAnimation = position;
+        visualization?.UpdateKeyAnimation(position);
+    }
+
+    private void StartTimers()
+    {
+        renderTimer?.Start();
+        keyTimer?.Start();
+    }
+
+    private void StopTimers()
+    {
+        renderTimer?.Stop();
+        keyTimer?.Stop();
     }
 
     private void UpdateControls()

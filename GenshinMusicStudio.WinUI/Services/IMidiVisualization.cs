@@ -9,4 +9,5 @@ public interface IMidiVisualization
     void Update(double position);
     void Reset();
     void RenderIdle() { }
+    void UpdateKeyAnimation(double position) { }
 }

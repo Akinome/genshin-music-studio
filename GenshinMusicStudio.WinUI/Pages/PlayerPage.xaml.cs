@@ -39,6 +39,14 @@ public sealed partial class PlayerPage : Page
             {
                 Rect = new Rect(0, 0, args.NewSize.Width, args.NewSize.Height),
             };
+            if (notes.Count > 0)
+            {
+                visualization?.Initialize(RollViewport, notes, duration);
+            }
+            else
+            {
+                visualization?.RenderIdle();
+            }
         };
         Loaded += PlayerPage_Loaded;
         Unloaded += PlayerPage_Unloaded;
@@ -360,12 +368,12 @@ public sealed partial class PlayerPage : Page
         WaterfallModeButton.IsChecked = mode == waterfallMode;
         KeyboardModeButton.IsChecked = mode == keyboardMode;
         KeyboardModeButton.Content = keyboardMode.Name;
+        mode.Initialize(RollViewport, notes, duration);
         if (notes.Count == 0)
         {
-            RollViewport.Children.Clear();
+            mode.RenderIdle();
             return;
         }
-        mode.Initialize(RollViewport, notes, duration);
         LogState("SetMode: " + mode.Name);
     }
 

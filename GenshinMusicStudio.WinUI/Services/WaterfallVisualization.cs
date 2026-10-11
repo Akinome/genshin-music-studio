@@ -11,9 +11,16 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private const double PixelsPerSecond = 140;
     private const double RespawnInterval = 0.5;
     private const double HighlightInterval = 0.25;
-    private const double KeyStripHeight = 26;
-    private const double KeyCapWidth = 32;
-    private const double KeyCapGap = 3;
+    private const double KeyStripHeight = 30;
+    private const double BlackKeyWidthRatio = 0.62;
+    private const int DefaultLowPitch = 48;
+    private const int DefaultHighPitch = 83;
+
+    private static readonly Windows.UI.Color WhiteKeyFill = Windows.UI.Color.FromArgb(255, 245, 246, 248);
+    private static readonly Windows.UI.Color WhiteKeyBorder = Windows.UI.Color.FromArgb(255, 196, 202, 214);
+    private static readonly Windows.UI.Color WhiteKeyText = Windows.UI.Color.FromArgb(255, 46, 52, 64);
+    private static readonly Windows.UI.Color BlackKeyFill = Windows.UI.Color.FromArgb(255, 38, 42, 52);
+    private static readonly Windows.UI.Color BlackKeyBorder = Windows.UI.Color.FromArgb(255, 22, 25, 32);
 
     private IReadOnlyList<MidiPlayer.MidiNote> notes = Array.Empty<MidiPlayer.MidiNote>();
     private double duration;
@@ -25,6 +32,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private TranslateTransform? transform;
     private double renderBase;
     private double lastHighlight;
+    private double whiteKeyWidth = 20;
 
     public string Name => "瀑布流";
 
@@ -33,9 +41,19 @@ public sealed class WaterfallVisualization : IMidiVisualization
         this.notes = notes;
         this.duration = duration;
         viewport = owner;
-        minPitch = Math.Floor((double)notes.Min(n => n.Pitch));
-        maxPitch = Math.Ceiling((double)notes.Max(n => n.Pitch));
-        if (maxPitch - minPitch < 23) maxPitch = minPitch + 23;
+        if (notes.Count > 0)
+        {
+            minPitch = Math.Floor((double)notes.Min(n => n.Pitch));
+            maxPitch = Math.Ceiling((double)notes.Max(n => n.Pitch));
+            // Keep the full 21-key span visible so the keyboard never gets cut.
+            if (minPitch > DefaultLowPitch) minPitch = DefaultLowPitch;
+            if (maxPitch < DefaultHighPitch) maxPitch = DefaultHighPitch;
+        }
+        else
+        {
+            minPitch = DefaultLowPitch;
+            maxPitch = DefaultHighPitch;
+        }
 
         owner.Children.Clear();
         canvas = new Canvas
@@ -62,7 +80,14 @@ public sealed class WaterfallVisualization : IMidiVisualization
         };
         owner.Children.Add(hitLine);
         renderBase = 0;
-        RenderWindow(0);
+        if (notes.Count > 0)
+        {
+            RenderWindow(0);
+        }
+        else
+        {
+            RenderIdle();
+        }
     }
 
     public void Update(double position)
@@ -88,13 +113,26 @@ public sealed class WaterfallVisualization : IMidiVisualization
         RenderWindow(0);
     }
 
+    public void RenderIdle()
+    {
+        if (canvas is null || keyStrip is null) return;
+        minPitch = DefaultLowPitch;
+        maxPitch = DefaultHighPitch;
+        renderBase = 0;
+        canvas.Width = 0;
+        canvas.Height = 0;
+        canvas.Children.Clear();
+        if (transform is not null) transform.Y = 0;
+        RenderKeyStrip();
+    }
+
     private void RenderWindow(double baseTime)
     {
         if (canvas is null || viewport is null) return;
-        var (range, keyWidth, _, viewportHeight) = LaneMetrics();
+        var (canvasWidth, viewportHeight) = PrepareGeometry();
         var windowSeconds = viewportHeight / PixelsPerSecond + 1.5;
         var canvasHeight = windowSeconds * PixelsPerSecond;
-        canvas.Width = (range + 1) * keyWidth;
+        canvas.Width = canvasWidth;
         canvas.Height = canvasHeight;
         canvas.Children.Clear();
 
@@ -108,7 +146,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
                 Height = canvasHeight,
                 Fill = pitch % 12 == 0 ? cLineBrush : laneBrush,
             };
-            Canvas.SetLeft(line, (pitch - minPitch) * keyWidth + keyWidth - 1);
+            Canvas.SetLeft(line, PitchToX(pitch) + PitchLaneWidth(pitch) - 1);
             Canvas.SetTop(line, 0);
             canvas.Children.Add(line);
         }
@@ -120,9 +158,10 @@ public sealed class WaterfallVisualization : IMidiVisualization
             if (note.Start > baseTime + windowSeconds) continue;
             var top = canvasHeight - (note.End - baseTime) * PixelsPerSecond;
             if (top < -viewportHeight || top > canvasHeight) continue;
+            var laneWidth = PitchLaneWidth(note.Pitch);
             var rect = new Rectangle
             {
-                Width = Math.Max(4, keyWidth - 3),
+                Width = Math.Max(4, laneWidth - 3),
                 Height = Math.Max(6, (note.End - note.Start) * PixelsPerSecond),
                 RadiusX = 3,
                 RadiusY = 3,
@@ -130,118 +169,125 @@ public sealed class WaterfallVisualization : IMidiVisualization
                 Opacity = 0.88,
                 Tag = note,
             };
-            Canvas.SetLeft(rect, (note.Pitch - minPitch) * keyWidth + 1.5);
+            Canvas.SetLeft(rect, PitchToX(note.Pitch) + 1.5);
             Canvas.SetTop(rect, top);
             canvas.Children.Add(rect);
-
-            if (keyWidth >= 13)
-            {
-                var caption = new TextBlock
-                {
-                    Text = KeyLabelForPitch(note.Pitch),
-                    FontSize = Math.Clamp(keyWidth * 0.52, 8, 12),
-                    Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
-                    Opacity = 0.9,
-                    IsHitTestVisible = false,
-                    Tag = note,
-                };
-                caption.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                Canvas.SetLeft(caption, (note.Pitch - minPitch) * keyWidth + keyWidth / 2 - caption.DesiredSize.Width / 2);
-                Canvas.SetTop(caption, top + Math.Max(0, rect.Height - caption.DesiredSize.Height) / 2);
-                canvas.Children.Add(caption);
-            }
         }
         RenderKeyStrip();
     }
 
-    private (int Range, double KeyWidth, double ViewportWidth, double ViewportHeight) LaneMetrics()
+    /// <summary>
+    /// Lays out the lanes the way a piano keyboard is laid out: seven wide
+    /// natural-key columns and five narrow accidental columns per octave, so
+    /// the keyboard drawn at the bottom lines up with the lanes exactly.
+    /// </summary>
+    private (double CanvasWidth, double ViewportHeight) PrepareGeometry()
     {
-        var range = (int)(maxPitch - minPitch);
-        if (range < 35) range = 35;
         var viewportWidth = viewport?.ActualWidth ?? 0;
         if (double.IsNaN(viewportWidth) || viewportWidth < 100) viewportWidth = 1100;
         var viewportHeight = viewport?.ActualHeight ?? 0;
         if (double.IsNaN(viewportHeight) || viewportHeight < 100) viewportHeight = 420;
-        return (range, Math.Clamp(viewportWidth / (range + 1), 10, 26), viewportWidth, viewportHeight);
+        var low = (int)Math.Floor(minPitch);
+        var high = (int)Math.Ceiling(maxPitch);
+        var whiteKeys = 0;
+        for (var pitch = low; pitch <= high; pitch++)
+        {
+            if (!IsSharp(pitch)) whiteKeys++;
+        }
+        if (whiteKeys < 1) whiteKeys = 15;
+        whiteKeyWidth = Math.Clamp(viewportWidth / whiteKeys, 14, 64);
+        var total = 0.0;
+        for (var pitch = low; pitch <= high; pitch++)
+        {
+            total += PitchLaneWidth(pitch);
+        }
+        return (total, viewportHeight);
+    }
+
+    private double PitchLaneWidth(int pitch) => IsSharp(pitch) ? whiteKeyWidth * BlackKeyWidthRatio : whiteKeyWidth;
+
+    private double PitchToX(int pitch)
+    {
+        var x = 0.0;
+        var low = (int)Math.Floor(minPitch);
+        for (var p = low; p <= pitch; p++)
+        {
+            if (p == pitch) return x;
+            x += PitchLaneWidth(p);
+        }
+        return x;
+    }
+
+    private static bool IsSharp(int pitch)
+    {
+        return pitch % 12 is 1 or 3 or 6 or 8 or 10;
     }
 
     private void RenderKeyStrip()
     {
-        if (keyStrip is null || canvas is null) return;
-        var (_, _, viewportWidth, _) = LaneMetrics();
-        keyStrip.Width = viewportWidth;
+        if (keyStrip is null || viewport is null) return;
+        var (width, _) = PrepareGeometry();
+        var left = Math.Max(0, ((viewport.ActualWidth > 0 ? viewport.ActualWidth : width) - width) / 2);
+        keyStrip.Width = viewport.ActualWidth > 0 ? viewport.ActualWidth : width;
         keyStrip.Height = KeyStripHeight;
         keyStrip.Children.Clear();
 
-        var total = 21 * KeyCapWidth + 20 * KeyCapGap;
-        var startX = Math.Max(8, (viewportWidth - total) / 2);
-        var background = new Rectangle
-        {
-            Width = total + 16,
-            Height = KeyStripHeight,
-            Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(150, 24, 28, 36)),
-            RadiusX = 7,
-            RadiusY = 7,
-        };
-        Canvas.SetLeft(background, startX - 8);
-        Canvas.SetTop(background, 0);
-        keyStrip.Children.Add(background);
+        var low = (int)Math.Floor(minPitch);
+        var high = (int)Math.Ceiling(maxPitch);
 
-        for (var button = 0; button < 21; button++)
+        for (var pitch = low; pitch <= high; pitch++)
         {
-            var pitch = PitchForButton(button);
-            var cap = new Border
+            if (IsSharp(pitch)) continue;
+            var key = new Border
             {
-                Width = KeyCapWidth,
-                Height = KeyStripHeight - 6,
-                CornerRadius = new CornerRadius(4),
-                Background = new SolidColorBrush(Windows.UI.Color.FromArgb(210, 58, 64, 78)),
+                Width = Math.Max(4, PitchLaneWidth(pitch) - 2),
+                Height = KeyStripHeight,
+                CornerRadius = new CornerRadius(0, 0, 4, 4),
+                Background = new SolidColorBrush(WhiteKeyFill),
+                BorderBrush = new SolidColorBrush(WhiteKeyBorder),
+                BorderThickness = new Thickness(1),
                 Child = new TextBlock
                 {
                     Text = Key21Layout.PhysicalKeyForPitch(pitch),
-                    FontSize = 12,
+                    FontSize = 11,
                     FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+                    Foreground = new SolidColorBrush(WhiteKeyText),
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
                 },
             };
-            Canvas.SetLeft(cap, startX + button * (KeyCapWidth + KeyCapGap));
-            Canvas.SetTop(cap, 3);
-            keyStrip.Children.Add(cap);
+            Canvas.SetLeft(key, left + PitchToX(pitch) + 1);
+            Canvas.SetTop(key, 0);
+            keyStrip.Children.Add(key);
+        }
+
+        for (var pitch = low; pitch <= high; pitch++)
+        {
+            if (!IsSharp(pitch)) continue;
+            var key = new Border
+            {
+                Width = Math.Max(3, PitchLaneWidth(pitch) - 1),
+                Height = KeyStripHeight * 0.6,
+                CornerRadius = new CornerRadius(0, 0, 3, 3),
+                Background = new SolidColorBrush(BlackKeyFill),
+                BorderBrush = new SolidColorBrush(BlackKeyBorder),
+                BorderThickness = new Thickness(1),
+            };
+            Canvas.SetLeft(key, left + PitchToX(pitch));
+            Canvas.SetTop(key, 0);
+            keyStrip.Children.Add(key);
         }
     }
-
-    private static int PitchForButton(int button)
-    {
-        var octave = button / 7;
-        var degree = button % 7;
-        return 48 + octave * 12 + Key21Layout.DegreeToSemitone(degree);
-    }
-
-    private static string KeyLabelForPitch(int pitch)
-        => Key21Layout.PhysicalKeyForPitch(pitch);
 
     private void HighlightPlayingNotes(double position)
     {
         if (canvas is null) return;
         var normal = (Brush)Application.Current.Resources["AccentBlueBrush"];
         var active = new SolidColorBrush(Microsoft.UI.Colors.White);
-        var activeText = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 40, 44, 54));
-        var normalText = new SolidColorBrush(Microsoft.UI.Colors.White);
         foreach (var child in canvas.Children)
         {
-            if (child is not FrameworkElement element || element.Tag is not MidiPlayer.MidiNote note) continue;
-            var lit = position >= note.Start - 0.02 && position <= note.End;
-            switch (element)
-            {
-                case Rectangle rect:
-                    rect.Fill = lit ? active : normal;
-                    break;
-                case TextBlock caption:
-                    caption.Foreground = lit ? activeText : normalText;
-                    break;
-            }
+            if (child is not Rectangle rect || rect.Tag is not MidiPlayer.MidiNote note) continue;
+            rect.Fill = position >= note.Start - 0.02 && position <= note.End ? active : normal;
         }
     }
 }

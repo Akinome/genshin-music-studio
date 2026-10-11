@@ -8,4 +8,5 @@ public interface IMidiVisualization
     void Initialize(Grid viewport, IReadOnlyList<MidiPlayer.MidiNote> notes, double duration);
     void Update(double position);
     void Reset();
+    void RenderIdle() { }
 }

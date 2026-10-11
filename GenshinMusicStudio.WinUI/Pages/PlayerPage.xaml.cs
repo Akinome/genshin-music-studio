@@ -190,17 +190,20 @@ public sealed partial class PlayerPage : Page
         if (AudioBox.SelectedItem is not ComboBoxItem item) return;
         var folder = item.Tag?.ToString() ?? string.Empty;
         App.Player.Stop();
+        var sequence = App.Instruments.NextLoadSequence();
         if (folder.Length == 0)
         {
-            App.Player.Instrument = null;
+            App.Player.SetInstrument(null, sequence);
             return;
         }
         PlayButton.IsEnabled = false;
         try
         {
-            await Task.Run(() => App.Instruments.LoadInstrument(folder));
-            App.Player.Instrument = App.Instruments;
+            var applied = await Task.Run(() => App.Instruments.LoadInstrument(folder, sequence));
+            if (!applied) return;
+            App.Player.SetInstrument(App.Instruments, sequence);
             App.Instruments.SetDeviceVolume(App.Player.Volume);
+            if (!IsLoaded) return;
             if (App.Instruments.Layout.IsDrumKit)
             {
                 SetMode(keyboardMode);
@@ -213,12 +216,15 @@ public sealed partial class PlayerPage : Page
         }
         catch (Exception ex)
         {
-            App.Player.Instrument = null;
+            App.Player.SetInstrument(null, sequence);
             _ = ShowMessageAsync("乐器加载失败", ex.Message);
         }
         finally
         {
-            PlayButton.IsEnabled = true;
+            if (IsLoaded)
+            {
+                PlayButton.IsEnabled = true;
+            }
         }
         var settings = AppSettings.Load();
         settings.AudioInstrument = folder;

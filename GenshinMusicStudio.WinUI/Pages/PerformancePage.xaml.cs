@@ -109,21 +109,26 @@ public sealed partial class PerformancePage : Page
         if (AudioBox.SelectedItem is not ComboBoxItem item) return;
         var folder = item.Tag?.ToString() ?? string.Empty;
         App.Player.Stop();
+        var sequence = App.Instruments.NextLoadSequence();
         if (folder.Length == 0)
         {
-            App.Player.Instrument = null;
+            App.Player.SetInstrument(null, sequence);
             return;
         }
         try
         {
-            await Task.Run(() => App.Instruments.LoadInstrument(folder));
-            App.Player.Instrument = App.Instruments;
+            var applied = await Task.Run(() => App.Instruments.LoadInstrument(folder, sequence));
+            if (!applied) return;
+            App.Player.SetInstrument(App.Instruments, sequence);
             App.Instruments.SetDeviceVolume(App.Player.Volume);
-            keyboard.Initialize(KeyboardViewport, Array.Empty<MidiPlayer.MidiNote>(), 0);
+            if (IsLoaded)
+            {
+                keyboard.Initialize(KeyboardViewport, Array.Empty<MidiPlayer.MidiNote>(), 0);
+            }
         }
         catch (Exception ex)
         {
-            App.Player.Instrument = null;
+            App.Player.SetInstrument(null, sequence);
             _ = ShowMessageAsync("乐器加载失败", ex.Message);
         }
         var settings = AppSettings.Load();

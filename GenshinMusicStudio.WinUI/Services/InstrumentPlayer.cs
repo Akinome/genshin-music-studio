@@ -17,48 +17,84 @@ public sealed class InstrumentPlayer : IDisposable
     private string currentInstrument = string.Empty;
     private double releaseSeconds;
     private InstrumentLayout layout = new();
+    private long loadSequence;
+    private long commitLock;
+    private readonly object commitGate = new();
 
     public string CurrentInstrument => currentInstrument;
     public InstrumentLayout Layout => layout;
 
     public double LatencySeconds => 0.1;
 
-    public void LoadInstrument(string folder)
+    public long NextLoadSequence() => Interlocked.Increment(ref loadSequence);
+
+    /// <summary>
+    /// Decodes an instrument folder and publishes it only when its sequence is
+    /// still the newest one, so a slow background load can never overwrite a
+    /// selection the user made afterwards.
+    /// </summary>
+    public bool LoadInstrument(string folder, long sequence)
     {
         lock (gate)
         {
             if (samples.Count > 0
                 && string.Equals(currentInstrument, Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)), StringComparison.OrdinalIgnoreCase))
             {
-                return;
+                lock (commitGate)
+                {
+                    commitLock = Math.Max(commitLock, sequence);
+                }
+                return true;
             }
+        }
+
+        var release = ReadReleaseSeconds(folder);
+        var newLayout = InstrumentLayout.FromShape(ReadShape(folder), DetectMidiNaming(folder));
+        var decoded = new Dictionary<int, float[]>();
+        foreach (var file in Directory.EnumerateFiles(folder, "*.mp3"))
+        {
+            var name = Path.GetFileNameWithoutExtension(file);
+            var key = newLayout.ByMidiName
+                ? newLayout.KeyIndexForPitch(int.TryParse(name.TrimStart('m', 'M'), out var midi) ? midi : -1)
+                : int.TryParse(name, out var button) && button >= 0 && button < newLayout.KeyCount
+                    ? button
+                    : -1;
+            if (key >= 0 && key < newLayout.KeyCount)
+            {
+                try
+                {
+                    decoded[key] = LoadSampleBuffer(file);
+                }
+                catch
+                {
+                    // A broken sample should not break the whole instrument.
+                }
+            }
+        }
+
+        lock (commitGate)
+        {
+            if (sequence < commitLock)
+            {
+                return false;
+            }
+            commitLock = sequence;
+        }
+
+        lock (gate)
+        {
             samples.Clear();
             activeVoices.Clear();
             currentInstrument = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar));
-            releaseSeconds = ReadReleaseSeconds(folder);
-            layout = InstrumentLayout.FromShape(ReadShape(folder), DetectMidiNaming(folder));
-            foreach (var file in Directory.EnumerateFiles(folder, "*.mp3"))
+            releaseSeconds = release;
+            layout = newLayout;
+            foreach (var pair in decoded)
             {
-                var name = Path.GetFileNameWithoutExtension(file);
-                var key = layout.ByMidiName
-                    ? layout.KeyIndexForPitch(int.TryParse(name.TrimStart('m', 'M'), out var midi) ? midi : -1)
-                    : int.TryParse(name, out var button) && button >= 0 && button < layout.KeyCount
-                        ? button
-                        : -1;
-                if (key >= 0 && key < layout.KeyCount)
-                {
-                    try
-                    {
-                        samples[key] = LoadSampleBuffer(file);
-                    }
-                    catch
-                    {
-                        // A broken sample should not break the whole instrument.
-                    }
-                }
+                samples[pair.Key] = pair.Value;
             }
-            EnsureOutput();
         }
+        EnsureOutput();
+        return true;
     }
 
     public void PlayKey(int pitch, double gain)

@@ -44,6 +44,7 @@ public sealed class MidiPlayer : IDisposable
     private double pausedPosition;
     private double playbackStart;
     private double currentDuration;
+    private long instrumentSequence;
 
     public event Action<bool>? PlayingChanged;
     public event Action<string, double, double>? ProgressChanged;
@@ -55,6 +56,21 @@ public sealed class MidiPlayer : IDisposable
     public double CurrentDuration => currentDuration;
 
     public InstrumentPlayer? Instrument { get; set; }
+
+    /// <summary>
+    /// Applies an instrument selection only when it is still the newest one.
+    /// A null instrument means the Windows MIDI synth; it still counts as a
+    /// selection so an older background load cannot override it.
+    /// </summary>
+    public void SetInstrument(InstrumentPlayer? instrument, long sequence)
+    {
+        lock (gate)
+        {
+            if (sequence < instrumentSequence) return;
+            instrumentSequence = sequence;
+            Instrument = instrument;
+        }
+    }
 
     public double CurrentPosition => playbackClock is null
         ? (IsPaused ? pausedPosition : playbackStart)
@@ -168,6 +184,7 @@ public sealed class MidiPlayer : IDisposable
         pausedPosition = 0;
         playbackStart = 0;
         currentDuration = 0;
+        Interlocked.Increment(ref instrumentSequence);
         var current = thread;
         if (current is { IsAlive: true } && current != Thread.CurrentThread)
         {

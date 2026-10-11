@@ -69,10 +69,11 @@ public partial class App : Application
         {
             var saved = AppSettings.Load().AudioInstrument;
             if (string.IsNullOrEmpty(saved) || !Directory.Exists(saved)) return;
+            var sequence = App.Instruments.NextLoadSequence();
             Task.Run(() =>
             {
-                App.Instruments.LoadInstrument(saved);
-                App.Player.Instrument = App.Instruments;
+                if (!App.Instruments.LoadInstrument(saved, sequence)) return;
+                App.Player.SetInstrument(App.Instruments, sequence);
                 App.Instruments.SetDeviceVolume(App.Player.Volume);
             });
         }

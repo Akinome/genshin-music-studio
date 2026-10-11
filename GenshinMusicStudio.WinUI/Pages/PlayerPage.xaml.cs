@@ -189,11 +189,15 @@ public sealed partial class PlayerPage : Page
     {
         if (AudioBox.SelectedItem is not ComboBoxItem item) return;
         var folder = item.Tag?.ToString() ?? string.Empty;
+        if (SelectionMatchesPlayback(folder)) return;
+        var wasPlaying = App.Player.IsPlaying || App.Player.IsPaused;
+        var position = App.Player.CurrentPosition;
         App.Player.Stop();
         var sequence = App.Instruments.NextLoadSequence();
         if (folder.Length == 0)
         {
             App.Player.SetInstrument(null, sequence);
+            RestartFrom(position, wasPlaying);
             return;
         }
         PlayButton.IsEnabled = false;
@@ -203,6 +207,7 @@ public sealed partial class PlayerPage : Page
             if (!applied) return;
             App.Player.SetInstrument(App.Instruments, sequence);
             App.Instruments.SetDeviceVolume(App.Player.Volume);
+            RestartFrom(position, wasPlaying);
             if (!IsLoaded) return;
             if (App.Instruments.Layout.IsDrumKit)
             {
@@ -229,6 +234,26 @@ public sealed partial class PlayerPage : Page
         var settings = AppSettings.Load();
         settings.AudioInstrument = folder;
         AppSettings.Save(settings);
+    }
+
+    private bool SelectionMatchesPlayback(string folder)
+    {
+        if (!App.Player.HasSelection) return false;
+        if (folder.Length == 0) return App.Player.Instrument is null;
+        return App.Player.Instrument is not null
+            && string.Equals(
+                Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)),
+                App.Instruments.CurrentInstrument,
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void RestartFrom(double position, bool wasPlaying)
+    {
+        if (!wasPlaying || position <= 0.05) return;
+        var path = FilePathBox.Text.Trim();
+        if (path.Length == 0 || !File.Exists(path)) return;
+        App.Player.Play(new[] { path }, null, position);
+        renderTimer?.Start();
     }
 
     private void VolumeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)

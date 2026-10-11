@@ -55,6 +55,13 @@ public sealed class MidiPlayer : IDisposable
     public string? PlayingFolder { get; private set; }
     public double CurrentDuration => currentDuration;
 
+    /// <summary>
+    /// True once a selection has been applied, including the Windows synth.
+    /// A null <see cref="Instrument"/> alone cannot distinguish "picked the
+    /// Windows synth" from "nothing selected yet".
+    /// </summary>
+    public bool HasSelection { get; private set; }
+
     public InstrumentPlayer? Instrument { get; set; }
 
     /// <summary>
@@ -69,6 +76,7 @@ public sealed class MidiPlayer : IDisposable
             if (sequence < instrumentSequence) return;
             instrumentSequence = sequence;
             Instrument = instrument;
+            HasSelection = true;
         }
     }
 
@@ -137,14 +145,15 @@ public sealed class MidiPlayer : IDisposable
         return (notes, duration);
     }
 
-    public void Play(IReadOnlyList<string> files, string? folder = null)
+    public void Play(IReadOnlyList<string> files, string? folder = null, double startAt = 0)
     {
         if (files.Count == 0) return;
         Stop();
+        CloseSynthesizer();
         PlayingFolder = folder;
         stopRequested = false;
         playlist = files;
-        playbackStart = 0;
+        playbackStart = Math.Max(0, startAt);
         currentDuration = 0;
         thread = new Thread(PlayLoop) { IsBackground = true };
         thread.Start();
@@ -197,6 +206,20 @@ public sealed class MidiPlayer : IDisposable
 
     private IntPtr manualHandle;
     private bool manualOpened;
+
+    private void CloseSynthesizer()
+    {
+        lock (gate)
+        {
+            if (!opened) return;
+            for (var note = 0; note < 128; note++)
+            {
+                midiOutShortMsg(handle, 0x80 | (note << 8));
+            }
+            midiOutClose(handle);
+            opened = false;
+        }
+    }
 
     public void ManualNoteOn(int pitch, int velocity = 96)
     {
@@ -315,18 +338,7 @@ public sealed class MidiPlayer : IDisposable
             playbackClock = null;
             if (activeInstrument is null)
             {
-                lock (gate)
-                {
-                    if (opened)
-                    {
-                        for (var note = 0; note < 128; note++)
-                        {
-                            midiOutShortMsg(handle, 0x80 | (note << 8));
-                        }
-                        midiOutClose(handle);
-                        opened = false;
-                    }
-                }
+                CloseSynthesizer();
             }
             PlayingFolder = null;
             PlayingChanged?.Invoke(false);

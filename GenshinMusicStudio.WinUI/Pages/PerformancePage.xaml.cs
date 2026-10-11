@@ -108,6 +108,7 @@ public sealed partial class PerformancePage : Page
     {
         if (AudioBox.SelectedItem is not ComboBoxItem item) return;
         var folder = item.Tag?.ToString() ?? string.Empty;
+        if (SelectionMatchesPlayback(folder)) return;
         App.Player.Stop();
         var sequence = App.Instruments.NextLoadSequence();
         if (folder.Length == 0)
@@ -134,6 +135,17 @@ public sealed partial class PerformancePage : Page
         var settings = AppSettings.Load();
         settings.AudioInstrument = folder;
         AppSettings.Save(settings);
+    }
+
+    private static bool SelectionMatchesPlayback(string folder)
+    {
+        if (!App.Player.HasSelection) return false;
+        if (folder.Length == 0) return App.Player.Instrument is null;
+        return App.Player.Instrument is not null
+            && string.Equals(
+                Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)),
+                App.Instruments.CurrentInstrument,
+                StringComparison.OrdinalIgnoreCase);
     }
 
     private void VolumeSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)

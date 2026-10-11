@@ -57,13 +57,43 @@ public sealed partial class MainWindow : Window
 
     private void Player_PlayingChanged(bool playing)
     {
+        var paused = App.Player.IsPaused;
+        var current = App.Player.CurrentPosition;
         DispatcherQueue.TryEnqueue(() =>
         {
-            if (!playing && StatusText.Text.StartsWith("正在播放", StringComparison.Ordinal))
+            if (playing)
             {
-                StatusText.Text = "就绪";
-                RunProgress.Value = 0;
+                if (StatusText.Text.StartsWith("已暂停", StringComparison.Ordinal))
+                {
+                    StatusText.Text = "正在播放" + StatusText.Text.Substring("已暂停".Length);
+                }
+                return;
             }
+
+            if (paused)
+            {
+                if (StatusText.Text.StartsWith("正在播放", StringComparison.Ordinal))
+                {
+                    StatusText.Text = "已暂停" + StatusText.Text.Substring("正在播放".Length);
+                }
+                else
+                {
+                    var duration = App.Player.CurrentDuration;
+                    if (duration > 0)
+                    {
+                        StatusText.Text = string.Format("已暂停  ({0:0}:{1:00} / {2:0}:{3:00})",
+                            (int)(current / 60), (int)current % 60, (int)(duration / 60), (int)duration % 60);
+                    }
+                    else
+                    {
+                        StatusText.Text = "已暂停";
+                    }
+                }
+                return;
+            }
+
+            StatusText.Text = "就绪";
+            RunProgress.Value = 0;
         });
     }
 

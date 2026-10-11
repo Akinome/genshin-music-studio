@@ -43,6 +43,7 @@ public sealed class MidiPlayer : IDisposable
     private Stopwatch? playbackClock;
     private double pausedPosition;
     private double playbackStart;
+    private double currentDuration;
 
     public event Action<bool>? PlayingChanged;
     public event Action<string, double, double>? ProgressChanged;
@@ -51,6 +52,7 @@ public sealed class MidiPlayer : IDisposable
     public bool IsPlaying => thread is { IsAlive: true } && !stopRequested;
     public bool IsPaused { get; private set; }
     public string? PlayingFolder { get; private set; }
+    public double CurrentDuration => currentDuration;
 
     public InstrumentPlayer? Instrument { get; set; }
 
@@ -127,6 +129,7 @@ public sealed class MidiPlayer : IDisposable
         stopRequested = false;
         playlist = files;
         playbackStart = 0;
+        currentDuration = 0;
         thread = new Thread(PlayLoop) { IsBackground = true };
         thread.Start();
         PlayingChanged?.Invoke(true);
@@ -164,6 +167,7 @@ public sealed class MidiPlayer : IDisposable
         IsPaused = false;
         pausedPosition = 0;
         playbackStart = 0;
+        currentDuration = 0;
         var current = thread;
         if (current is { IsAlive: true } && current != Thread.CurrentThread)
         {
@@ -240,6 +244,7 @@ public sealed class MidiPlayer : IDisposable
             var clock = Stopwatch.StartNew();
             playbackClock = clock;
             var total = events.Count > 0 ? events[^1].Time : 0;
+            currentDuration = total;
             var lastReport = -1.0;
             var lead = Instrument?.LatencySeconds ?? 0.02;
             foreach (var evt in events)

@@ -11,9 +11,12 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private const double PixelsPerSecond = 140;
     private const double RespawnInterval = 0.5;
     private const double HighlightInterval = 0.25;
-    private const double KeyStripHeight = 26;
-    private const double KeyCapWidth = 32;
-    private const double KeyCapGap = 3;
+    private const double KeyStripHeight = 34;
+    private const double WhiteKeyWidth = 46;
+    private const double WhiteKeyHeight = 34;
+    private const double BlackKeyWidth = 28;
+    private const double BlackKeyHeight = 21;
+    private const double KeyBorderThickness = 1.4;
     private const int DefaultLowPitch = 48;
     private const int DefaultHighPitch = 83;
 
@@ -26,6 +29,13 @@ public sealed class WaterfallVisualization : IMidiVisualization
         [8] = "lab",
         [10] = "tib",
     };
+
+    private static readonly Windows.UI.Color WhiteKeyFill = Windows.UI.Color.FromArgb(255, 246, 247, 250);
+    private static readonly Windows.UI.Color WhiteKeyBorder = Windows.UI.Color.FromArgb(255, 198, 204, 216);
+    private static readonly Windows.UI.Color WhiteKeyText = Windows.UI.Color.FromArgb(255, 44, 50, 62);
+    private static readonly Windows.UI.Color BlackKeyFill = Windows.UI.Color.FromArgb(255, 36, 40, 50);
+    private static readonly Windows.UI.Color BlackKeyBorder = Windows.UI.Color.FromArgb(255, 20, 23, 30);
+    private static readonly Windows.UI.Color BlackKeyText = Windows.UI.Color.FromArgb(255, 236, 238, 242);
 
     private IReadOnlyList<MidiPlayer.MidiNote> notes = Array.Empty<MidiPlayer.MidiNote>();
     private double duration;
@@ -202,41 +212,89 @@ public sealed class WaterfallVisualization : IMidiVisualization
         keyCaps.Clear();
         pressedKeys.Clear();
 
-        var total = 21 * KeyCapWidth + 20 * KeyCapGap;
-        var startX = Math.Max(8, (viewportWidth - total) / 2);
-        var background = new Rectangle
-        {
-            Width = total + 16,
-            Height = KeyStripHeight,
-            Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(150, 24, 28, 36)),
-            RadiusX = 7,
-            RadiusY = 7,
-        };
-        Canvas.SetLeft(background, startX - 8);
-        Canvas.SetTop(background, 0);
-        keyStrip.Children.Add(background);
-
+        var whitePitches = new List<int>();
+        var blackPitches = new List<int>();
         for (var button = 0; button < 21; button++)
         {
             var pitch = PitchForButton(button);
+            (IsSharp(pitch) ? blackPitches : whitePitches).Add(pitch);
+        }
+
+        // Scale the keys down when the window is narrow so the row never overflows.
+        var available = Math.Max(200, viewportWidth - 16);
+        var whiteWidth = Math.Min(WhiteKeyWidth, available / Math.Max(1, whitePitches.Count));
+        var blackWidth = whiteWidth * (BlackKeyWidth / WhiteKeyWidth);
+        var keyboardWidth = whitePitches.Count * whiteWidth;
+        var startX = (viewportWidth - keyboardWidth) / 2;
+        var blackHeight = BlackKeyHeight / WhiteKeyHeight * KeyStripHeight;
+        var background = new Rectangle
+        {
+            Width = Math.Min(viewportWidth, keyboardWidth + 12),
+            Height = KeyStripHeight,
+            Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(150, 24, 28, 36)),
+            RadiusX = 5,
+            RadiusY = 5,
+        };
+        Canvas.SetLeft(background, startX - 6);
+        Canvas.SetTop(background, 0);
+        keyStrip.Children.Add(background);
+
+        // White keys first, laid side by side like a real piano.
+        for (var i = 0; i < whitePitches.Count; i++)
+        {
+            var pitch = whitePitches[i];
             var cap = new Border
             {
-                Width = KeyCapWidth,
-                Height = KeyStripHeight - 6,
-                CornerRadius = new CornerRadius(4),
-                Background = new SolidColorBrush(KeyCapFill(pitch)),
+                Width = whiteWidth,
+                Height = KeyStripHeight,
+                CornerRadius = new CornerRadius(0, 0, 4, 4),
+                Background = new SolidColorBrush(WhiteKeyFill),
+                BorderBrush = new SolidColorBrush(WhiteKeyBorder),
+                BorderThickness = new Thickness(KeyBorderThickness),
                 Child = new TextBlock
                 {
                     Text = KeyNameForPitch(pitch),
-                    FontSize = 12,
+                    FontSize = 13,
                     FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+                    Foreground = new SolidColorBrush(WhiteKeyText),
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
                 },
             };
-            Canvas.SetLeft(cap, startX + button * (KeyCapWidth + KeyCapGap));
-            Canvas.SetTop(cap, 3);
+            Canvas.SetLeft(cap, startX + i * whiteWidth);
+            Canvas.SetTop(cap, 0);
+            keyStrip.Children.Add(cap);
+            keyCaps[pitch] = cap;
+        }
+
+        // Black keys sit between white keys, narrower and shorter, drawn on top.
+        foreach (var pitch in blackPitches)
+        {
+            // A piano black key sits mostly on the lower white key, leaving a
+            // small slice of the upper white key visible.
+            var index = whitePitches.IndexOf(pitch);
+            if (index < 0) continue;
+            var centerX = startX + index * whiteWidth + whiteWidth * 0.72;
+            var cap = new Border
+            {
+                Width = blackWidth,
+                Height = blackHeight,
+                CornerRadius = new CornerRadius(0, 0, 3, 3),
+                Background = new SolidColorBrush(BlackKeyFill),
+                BorderBrush = new SolidColorBrush(BlackKeyBorder),
+                BorderThickness = new Thickness(KeyBorderThickness),
+                Child = new TextBlock
+                {
+                    Text = KeyNameForPitch(pitch),
+                    FontSize = 10,
+                    Foreground = new SolidColorBrush(BlackKeyText),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Bottom,
+                    Margin = new Thickness(0, 0, 0, 2),
+                },
+            };
+            Canvas.SetLeft(cap, centerX - blackWidth / 2);
+            Canvas.SetTop(cap, 0);
             keyStrip.Children.Add(cap);
             keyCaps[pitch] = cap;
         }
@@ -272,17 +330,20 @@ public sealed class WaterfallVisualization : IMidiVisualization
             {
                 continue;
             }
-            pair.Value.Background = new SolidColorBrush(KeyCapFill(pair.Key, pressed));
+            ApplyKeyVisual(pair.Key, pair.Value, pressed);
         }
     }
 
-    private static Windows.UI.Color KeyCapFill(int pitch, bool pressed = false)
+    private static void ApplyKeyVisual(int pitch, Border key, bool pressed)
     {
-        if (pressed) return Windows.UI.Color.FromArgb(255, 232, 163, 61);
-        var sharp = pitch % 12 is 1 or 3 or 6 or 8 or 10;
-        return sharp
-            ? Windows.UI.Color.FromArgb(255, 88, 96, 112)
-            : Windows.UI.Color.FromArgb(255, 58, 64, 78);
+        var sharp = IsSharp(pitch);
+        key.Background = new SolidColorBrush(pressed
+            ? Windows.UI.Color.FromArgb(255, 232, 163, 61)
+            : sharp ? BlackKeyFill : WhiteKeyFill);
+        key.BorderBrush = new SolidColorBrush(pressed
+            ? Windows.UI.Color.FromArgb(255, 196, 128, 30)
+            : sharp ? BlackKeyBorder : WhiteKeyBorder);
+        key.Height = (sharp ? KeyStripHeight * (BlackKeyHeight / WhiteKeyHeight) : KeyStripHeight) + (pressed ? 4 : 0);
     }
 
     private static string KeyNameForPitch(int pitch)
@@ -292,6 +353,11 @@ public sealed class WaterfallVisualization : IMidiVisualization
         var index = (int)(pc * 7.0 / 12.0);
         if (index > 6) index = 6;
         return DegreeNames[index];
+    }
+
+    private static bool IsSharp(int pitch)
+    {
+        return ((pitch % 12) + 12) % 12 is 1 or 3 or 6 or 8 or 10;
     }
 
     private void HighlightPlayingNotes(double position)

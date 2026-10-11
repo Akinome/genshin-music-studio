@@ -6,27 +6,27 @@ using Microsoft.UI.Xaml.Shapes;
 namespace GenshinMusicStudio_WinUI.Services;
 
 /// <summary>
-/// Falling-note view with a standard piano keybed at the bottom. Lanes are laid
-/// out like a real keyboard: seven wide white keys per octave with narrower
-/// black keys sitting in the gaps, so every falling note lines up with the key
-/// that plays it.
+/// Falling-note view with a standard piano keybed. Lanes follow real keyboard
+/// geometry: seven wide white keys per octave with narrower black keys in the
+/// gaps, and the keybed is drawn into the same scrolling canvas as the notes so
+/// every falling note lands exactly on the key that plays it.
 /// </summary>
 public sealed class WaterfallVisualization : IMidiVisualization
 {
     private const double PixelsPerSecond = 140;
     private const double RespawnInterval = 0.5;
     private const double HighlightInterval = 0.25;
-    private const double MinWhiteKeyWidth = 13;
-    private const double MaxWhiteKeyWidth = 46;
+    private const double MinWhiteKeyWidth = 11;
+    private const double MaxWhiteKeyWidth = 40;
     private const double BlackKeyWidthRatio = 0.6;
     private const double BlackKeyHeightRatio = 0.62;
     private const int DefaultLowPitch = 48;
     private const int DefaultHighPitch = 83;
 
     private static readonly Windows.UI.Color WhiteKeyFill = Windows.UI.Color.FromArgb(255, 247, 248, 251);
-    private static readonly Windows.UI.Color WhiteKeyBorder = Windows.UI.Color.FromArgb(255, 190, 197, 210);
-    private static readonly Windows.UI.Color BlackKeyFill = Windows.UI.Color.FromArgb(255, 32, 36, 46);
-    private static readonly Windows.UI.Color BlackKeyBorder = Windows.UI.Color.FromArgb(255, 16, 19, 26);
+    private static readonly Windows.UI.Color WhiteKeyBorder = Windows.UI.Color.FromArgb(255, 186, 194, 208);
+    private static readonly Windows.UI.Color BlackKeyFill = Windows.UI.Color.FromArgb(255, 30, 34, 44);
+    private static readonly Windows.UI.Color BlackKeyBorder = Windows.UI.Color.FromArgb(255, 12, 15, 22);
     private static readonly Windows.UI.Color PressedWhite = Windows.UI.Color.FromArgb(255, 232, 163, 61);
     private static readonly Windows.UI.Color PressedBlack = Windows.UI.Color.FromArgb(255, 198, 132, 36);
 
@@ -40,7 +40,6 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private double whiteKeyWidth = 24;
     private double keyboardHeight = 48;
     private Canvas? canvas;
-    private Canvas? keyStrip;
     private Grid? viewport;
     private TranslateTransform? transform;
     private double renderBase;
@@ -72,13 +71,6 @@ public sealed class WaterfallVisualization : IMidiVisualization
         canvas.RenderTransform = transform;
         owner.Children.Add(canvas);
 
-        keyStrip = new Canvas
-        {
-            VerticalAlignment = VerticalAlignment.Bottom,
-            IsHitTestVisible = false,
-        };
-        owner.Children.Add(keyStrip);
-
         renderBase = 0;
         RenderWindow(0);
     }
@@ -90,10 +82,10 @@ public sealed class WaterfallVisualization : IMidiVisualization
         maxPitch = DefaultHighPitch;
         renderBase = 0;
         if (transform is not null) transform.Y = 0;
-        canvas.Width = 0;
-        canvas.Height = 0;
         canvas.Children.Clear();
-        RenderKeyboard(0);
+        keyRects.Clear();
+        pressedKeys.Clear();
+        RenderWindow(0);
     }
 
     public void Update(double position)
@@ -138,23 +130,24 @@ public sealed class WaterfallVisualization : IMidiVisualization
 
     private void RenderWindow(double baseTime)
     {
-        if (canvas is null || viewport is null) return;
+        if (canvas is null) return;
         var viewportWidth = SafeWidth();
         var viewportHeight = SafeHeight();
         var contentWidth = GetContentWidth(viewportWidth);
-        var left = (viewportWidth - contentWidth) / 2;
+        var canvasWidth = Math.Max(viewportWidth, contentWidth);
+        var left = (canvasWidth - contentWidth) / 2;
         var canvasHeight = viewportHeight;
         var windowSeconds = canvasHeight / PixelsPerSecond;
 
-        canvas.Width = contentWidth;
+        canvas.Width = canvasWidth;
         canvas.Height = canvasHeight;
         canvas.Children.Clear();
+        keyRects.Clear();
+        pressedKeys.Clear();
 
         var laneBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(26, 128, 128, 128));
         var landmarkBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(55, 128, 128, 128));
-        var low = (int)Math.Floor(minPitch);
-        var high = (int)Math.Ceiling(maxPitch);
-        for (var pitch = low; pitch <= high; pitch++)
+        for (var pitch = (int)minPitch; pitch <= (int)maxPitch; pitch++)
         {
             var line = new Rectangle
             {
@@ -189,37 +182,27 @@ public sealed class WaterfallVisualization : IMidiVisualization
             canvas.Children.Add(rect);
         }
 
-        RenderKeyboard(canvasHeight);
+        DrawKeyboard(left, canvasHeight);
     }
 
-    /// <summary>Draws the full piano keybed across the same lanes as the notes.</summary>
-    private void RenderKeyboard(double canvasHeight)
+    /// <summary>Paints the piano keybed at the bottom of the same canvas.</summary>
+    private void DrawKeyboard(double left, double canvasHeight)
     {
-        if (keyStrip is null) return;
-        var viewportWidth = SafeWidth();
-        var contentWidth = GetContentWidth(viewportWidth);
-        var left = (viewportWidth - contentWidth) / 2;
-        keyboardHeight = Math.Clamp(whiteKeyWidth * 2.2, 30, 56);
-
-        keyStrip.Width = Math.Max(viewportWidth, contentWidth);
-        keyStrip.Height = keyboardHeight;
-        keyStrip.Children.Clear();
-        keyRects.Clear();
-        pressedKeys.Clear();
-
+        if (canvas is null) return;
+        keyboardHeight = Math.Clamp(whiteKeyWidth * 2.2, 26, 54);
         var top = canvasHeight - keyboardHeight;
         var low = (int)Math.Floor(minPitch);
         var high = (int)Math.Ceiling(maxPitch);
 
-        var background = new Rectangle
+        var backing = new Rectangle
         {
-            Width = contentWidth,
+            Width = GetContentWidth(SafeWidth()),
             Height = keyboardHeight,
             Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 22, 26, 34)),
         };
-        Canvas.SetLeft(background, left);
-        Canvas.SetTop(background, top);
-        keyStrip.Children.Add(background);
+        Canvas.SetLeft(backing, left);
+        Canvas.SetTop(backing, top);
+        canvas.Children.Add(backing);
 
         for (var pitch = low; pitch <= high; pitch++)
         {
@@ -232,12 +215,12 @@ public sealed class WaterfallVisualization : IMidiVisualization
                 RadiusY = 2,
                 Fill = new SolidColorBrush(WhiteKeyFill),
                 Stroke = new SolidColorBrush(WhiteKeyBorder),
-                StrokeThickness = 1.2,
+                StrokeThickness = 1.1,
                 Tag = pitch,
             };
             Canvas.SetLeft(rect, left + PitchToX(pitch) + 0.75);
             Canvas.SetTop(rect, top + 1);
-            keyStrip.Children.Add(rect);
+            canvas.Children.Add(rect);
             keyRects[pitch] = rect;
         }
 
@@ -255,12 +238,12 @@ public sealed class WaterfallVisualization : IMidiVisualization
                 RadiusY = 2,
                 Fill = new SolidColorBrush(BlackKeyFill),
                 Stroke = new SolidColorBrush(BlackKeyBorder),
-                StrokeThickness = 1.2,
+                StrokeThickness = 1.1,
                 Tag = pitch,
             };
             Canvas.SetLeft(rect, centerX - blackWidth / 2);
             Canvas.SetTop(rect, top);
-            keyStrip.Children.Add(rect);
+            canvas.Children.Add(rect);
             keyRects[pitch] = rect;
         }
     }
@@ -362,9 +345,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private double BlackKeyCenterX(int pitch)
     {
         var lowerWhite = PreviousWhitePitch(pitch);
-        var lowerX = PitchToX(lowerWhite);
-        var upperX = PitchToX(lowerWhite + 1);
-        return (lowerX + upperX) / 2;
+        return (PitchToX(lowerWhite) + PitchToX(lowerWhite + 1)) / 2;
     }
 
     private static int PreviousWhitePitch(int pitch)

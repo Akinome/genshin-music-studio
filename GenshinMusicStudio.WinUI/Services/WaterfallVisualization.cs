@@ -14,7 +14,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private const double KeyStripHeight = 34;
     private const double WhiteKeyWidth = 46;
     private const double WhiteKeyHeight = 34;
-    private const double BlackKeyWidth = 28;
+    private const double BlackKeyWidth = 26;
     private const double BlackKeyHeight = 21;
     private const double KeyBorderThickness = 1.4;
     private const int DefaultLowPitch = 48;
@@ -87,14 +87,6 @@ public sealed class WaterfallVisualization : IMidiVisualization
         };
         owner.Children.Add(keyStrip);
 
-        var hitLine = new Rectangle
-        {
-            Height = 3,
-            VerticalAlignment = VerticalAlignment.Bottom,
-            Fill = new SolidColorBrush(Microsoft.UI.Colors.Orange),
-            IsHitTestVisible = false,
-        };
-        owner.Children.Add(hitLine);
         renderBase = 0;
         if (notes.Count > 0)
         {
@@ -270,11 +262,12 @@ public sealed class WaterfallVisualization : IMidiVisualization
         // Black keys sit between white keys, narrower and shorter, drawn on top.
         foreach (var pitch in blackPitches)
         {
-            // A piano black key sits mostly on the lower white key, leaving a
-            // small slice of the upper white key visible.
-            var index = whitePitches.IndexOf(pitch);
+            // The black key straddles the gap between two white keys: wider gaps
+            // (C-D, D-E, F-G, G-A, A-B) sit at ~0.68, the narrow E-F/B-C gaps sit centred.
+            var offset = IsWideGap(pitch) ? 0.68 : 0.5;
+            var index = whitePitches.IndexOf(PreviousWhitePitch(pitch));
             if (index < 0) continue;
-            var centerX = startX + index * whiteWidth + whiteWidth * 0.72;
+            var centerX = startX + index * whiteWidth + whiteWidth * offset;
             var cap = new Border
             {
                 Width = blackWidth,
@@ -358,6 +351,26 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private static bool IsSharp(int pitch)
     {
         return ((pitch % 12) + 12) % 12 is 1 or 3 or 6 or 8 or 10;
+    }
+
+    /// <summary>The natural pitch immediately below a black key.</summary>
+    private static int PreviousWhitePitch(int pitch)
+    {
+        var candidate = pitch - 1;
+        while (candidate >= DefaultLowPitch && IsSharp(candidate))
+        {
+            candidate--;
+        }
+        return candidate;
+    }
+
+    /// <summary>
+    /// True when the black key sits in a wide white-key gap (C-D, D-E, F-G, G-A,
+    /// A-B). The E-F and B-C gaps have no black key, so they never appear here.
+    /// </summary>
+    private static bool IsWideGap(int pitch)
+    {
+        return ((pitch % 12) + 12) % 12 is 1 or 3 or 8 or 10;
     }
 
     private void HighlightPlayingNotes(double position)

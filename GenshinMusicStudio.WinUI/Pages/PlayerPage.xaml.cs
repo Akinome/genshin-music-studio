@@ -395,12 +395,10 @@ public sealed partial class PlayerPage : Page
         KeyboardModeButton.IsChecked = mode == keyboardMode;
         KeyboardModeButton.Content = keyboardMode.Name;
         mode.Initialize(RollViewport, notes, duration);
-        if (notes.Count == 0)
+        if (notes.Count > 0)
         {
-            mode.RenderIdle();
-            return;
+            LogState("SetMode: " + mode.Name);
         }
-        LogState("SetMode: " + mode.Name);
     }
 
     private void LogState(string label)

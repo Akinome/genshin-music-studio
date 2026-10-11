@@ -14,6 +14,8 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private const double KeyStripHeight = 26;
     private const double KeyCapWidth = 32;
     private const double KeyCapGap = 3;
+    private const int DefaultLowPitch = 48;
+    private const int DefaultHighPitch = 83;
 
     private static readonly string[] DegreeNames = { "do", "re", "mi", "fa", "sol", "la", "si" };
     private static readonly Dictionary<int, string> AccidentalNames = new()
@@ -45,9 +47,19 @@ public sealed class WaterfallVisualization : IMidiVisualization
         this.notes = notes;
         this.duration = duration;
         viewport = owner;
-        minPitch = Math.Floor((double)notes.Min(n => n.Pitch));
-        maxPitch = Math.Ceiling((double)notes.Max(n => n.Pitch));
-        if (maxPitch - minPitch < 23) maxPitch = minPitch + 23;
+        if (notes.Count > 0)
+        {
+            minPitch = Math.Floor((double)notes.Min(n => n.Pitch));
+            maxPitch = Math.Ceiling((double)notes.Max(n => n.Pitch));
+            // Always keep the full playable span so the keyboard never shrinks.
+            if (minPitch > DefaultLowPitch) minPitch = DefaultLowPitch;
+            if (maxPitch < DefaultHighPitch) maxPitch = DefaultHighPitch;
+        }
+        else
+        {
+            minPitch = DefaultLowPitch;
+            maxPitch = DefaultHighPitch;
+        }
 
         owner.Children.Clear();
         canvas = new Canvas
@@ -74,7 +86,27 @@ public sealed class WaterfallVisualization : IMidiVisualization
         };
         owner.Children.Add(hitLine);
         renderBase = 0;
-        RenderWindow(0);
+        if (notes.Count > 0)
+        {
+            RenderWindow(0);
+        }
+        else
+        {
+            RenderIdle();
+        }
+    }
+
+    public void RenderIdle()
+    {
+        if (canvas is null) return;
+        minPitch = DefaultLowPitch;
+        maxPitch = DefaultHighPitch;
+        renderBase = 0;
+        if (transform is not null) transform.Y = 0;
+        canvas.Width = 0;
+        canvas.Height = 0;
+        canvas.Children.Clear();
+        RenderKeyStrip();
     }
 
     public void Update(double position)

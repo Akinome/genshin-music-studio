@@ -184,7 +184,6 @@ public sealed class MidiPlayer : IDisposable
         pausedPosition = 0;
         playbackStart = 0;
         currentDuration = 0;
-        Interlocked.Increment(ref instrumentSequence);
         var current = thread;
         if (current is { IsAlive: true } && current != Thread.CurrentThread)
         {
@@ -213,6 +212,7 @@ public sealed class MidiPlayer : IDisposable
                 if (midiOutOpen(out manualHandle, 0, IntPtr.Zero, IntPtr.Zero, 0) != 0)
                 {
                     manualOpened = false;
+                    PlaybackError?.Invoke("无法打开 Windows MIDI 合成器，系统可能未启用 Microsoft GS Wavetable Synth。");
                     return;
                 }
                 manualOpened = true;
@@ -242,9 +242,10 @@ public sealed class MidiPlayer : IDisposable
     private void PlayLoop()
     {
         var startFrom = playbackStart;
+        var activeInstrument = Instrument;
         try
         {
-            if (Instrument is null)
+            if (activeInstrument is null)
             {
                 if (midiOutOpen(out handle, 0, IntPtr.Zero, IntPtr.Zero, 0) != 0)
                 {
@@ -263,7 +264,7 @@ public sealed class MidiPlayer : IDisposable
             var total = events.Count > 0 ? events[^1].Time : 0;
             currentDuration = total;
             var lastReport = -1.0;
-            var lead = Instrument?.LatencySeconds ?? 0.02;
+            var lead = activeInstrument?.LatencySeconds ?? 0.02;
             foreach (var evt in events)
             {
                 if (stopRequested) return;
@@ -278,18 +279,18 @@ public sealed class MidiPlayer : IDisposable
                 }
                 if (evt.IsOn)
                 {
-                    if (Instrument is not null)
+                    if (activeInstrument is not null)
                     {
-                        Instrument.PlayKey(evt.Pitch, Math.Clamp(velocityBoost, 0.1, 1.0));
+                        activeInstrument.PlayKey(evt.Pitch, Math.Clamp(velocityBoost, 0.1, 1.0));
                     }
                     else
                     {
                         midiOutShortMsg(handle, ScaleVelocity(0x90 | (Key21Layout.FoldPitch(evt.Pitch) << 8) | (evt.Velocity << 16), velocityBoost));
                     }
                 }
-                else if (Instrument is not null)
+                else if (activeInstrument is not null)
                 {
-                    Instrument.NoteOff(evt.Pitch);
+                    activeInstrument.NoteOff(evt.Pitch);
                 }
                 else
                 {
@@ -312,7 +313,7 @@ public sealed class MidiPlayer : IDisposable
         finally
         {
             playbackClock = null;
-            if (Instrument is null)
+            if (activeInstrument is null)
             {
                 lock (gate)
                 {

@@ -12,6 +12,9 @@ public sealed class InstrumentPlayer : IDisposable
     private readonly object gate = new();
     private readonly Dictionary<int, float[]> samples = new();
     private readonly Dictionary<int, List<CachedSampleSource>> activeVoices = new();
+    private readonly Dictionary<string, InstrumentData> cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<string> cacheOrder = new();
+    private const int MaxCachedInstruments = 3;
     private WaveOutEvent? output;
     private MixingSampleProvider? mixer;
     private string currentInstrument = string.Empty;
@@ -35,10 +38,10 @@ public sealed class InstrumentPlayer : IDisposable
     /// </summary>
     public bool LoadInstrument(string folder, long sequence)
     {
+        var name = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar));
         lock (gate)
         {
-            if (samples.Count > 0
-                && string.Equals(currentInstrument, Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)), StringComparison.OrdinalIgnoreCase))
+            if (samples.Count > 0 && string.Equals(currentInstrument, name, StringComparison.OrdinalIgnoreCase))
             {
                 lock (commitGate)
                 {
@@ -48,10 +51,46 @@ public sealed class InstrumentPlayer : IDisposable
             }
         }
 
+        if (!cache.TryGetValue(name, out var data))
+        {
+            data = Decode(folder);
+        }
+        lock (gate)
+        {
+            if (!cache.ContainsKey(name))
+            {
+                cache[name] = data;
+                cacheOrder.Remove(name);
+                cacheOrder.Add(name);
+                while (cacheOrder.Count > MaxCachedInstruments)
+                {
+                    cache.Remove(cacheOrder[0]);
+                    cacheOrder.RemoveAt(0);
+                }
+            }
+        }
+
+        lock (commitGate)
+        {
+            if (sequence < commitLock) return false;
+            commitLock = sequence;
+        }
+
+        lock (gate)
+        {
+            ReplaceSamples(data);
+        }
+        EnsureOutput();
+        return true;
+    }
+
+    private static InstrumentData Decode(string folder)
+    {
         var release = ReadReleaseSeconds(folder);
         var newLayout = InstrumentLayout.FromShape(ReadShape(folder), DetectMidiNaming(folder));
-        var decoded = new Dictionary<int, float[]>();
-        foreach (var file in Directory.EnumerateFiles(folder, "*.mp3"))
+        var files = Directory.EnumerateFiles(folder, "*.mp3").ToList();
+        var decoded = new float[newLayout.KeyCount][];
+        Parallel.ForEach(files, file =>
         {
             var name = Path.GetFileNameWithoutExtension(file);
             var key = newLayout.ByMidiName
@@ -70,32 +109,37 @@ public sealed class InstrumentPlayer : IDisposable
                     // A broken sample should not break the whole instrument.
                 }
             }
-        }
+        });
 
-        lock (commitGate)
+        var map = new Dictionary<int, float[]>();
+        for (var key = 0; key < decoded.Length; key++)
         {
-            if (sequence < commitLock)
+            if (decoded[key] is not null)
             {
-                return false;
-            }
-            commitLock = sequence;
-        }
-
-        lock (gate)
-        {
-            samples.Clear();
-            activeVoices.Clear();
-            currentInstrument = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar));
-            releaseSeconds = release;
-            layout = newLayout;
-            foreach (var pair in decoded)
-            {
-                samples[pair.Key] = pair.Value;
+                map[key] = decoded[key];
             }
         }
-        EnsureOutput();
-        return true;
+        return new InstrumentData(Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)), map, newLayout, release);
     }
+
+    private void ReplaceSamples(InstrumentData data)
+    {
+        samples.Clear();
+        activeVoices.Clear();
+        currentInstrument = data.Name;
+        releaseSeconds = data.ReleaseSeconds;
+        layout = data.Layout;
+        foreach (var pair in data.Samples)
+        {
+            samples[pair.Key] = pair.Value;
+        }
+    }
+
+    private sealed record InstrumentData(
+        string Name,
+        Dictionary<int, float[]> Samples,
+        InstrumentLayout Layout,
+        double ReleaseSeconds);
 
     public void PlayKey(int pitch, double gain)
     {

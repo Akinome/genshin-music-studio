@@ -1,12 +1,14 @@
 using GenshinMusicStudio_WinUI.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 
 namespace GenshinMusicStudio_WinUI.Pages;
 
 public sealed partial class DownloadPage : Page
 {
     private Dictionary<string, string?>? modelStatus;
+    private List<BilibiliVideo> searchResults = new();
 
     public DownloadPage()
     {
@@ -19,6 +21,7 @@ public sealed partial class DownloadPage : Page
 
     private async void DownloadPage_Loaded(object sender, RoutedEventArgs e)
     {
+        AppendYuanQinBox.IsChecked = AppSettings.Load().SearchDefaultYuanQin ?? true;
         App.Backend.RunningChanged += SetRunning;
         await RefreshModelStatusAsync();
     }
@@ -63,6 +66,104 @@ public sealed partial class DownloadPage : Page
 
     private async void ModelBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateModelStatusHint();
 
+    private async void Search_Click(object sender, RoutedEventArgs e) => await RunSearchAsync();
+
+    private void AppendYuanQin_Changed(object sender, RoutedEventArgs e)
+    {
+        var settings = AppSettings.Load();
+        settings.SearchDefaultYuanQin = AppendYuanQinBox.IsChecked == true;
+        AppSettings.Save(settings);
+    }
+
+    private async void SearchBox_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key != Windows.System.VirtualKey.Enter) return;
+        e.Handled = true;
+        await RunSearchAsync();
+    }
+
+    private async Task RunSearchAsync()
+    {
+        var raw = SearchBox.Text.Trim();
+        if (raw.Length == 0) return;
+
+        // 直接输入 BV 号或链接时不必搜索，填进下方即可。
+        var direct = BilibiliSearch.TryNormalizeUrl(raw);
+        if (direct is not null)
+        {
+            UrlBox.Text = direct;
+            SearchStatusText.Text = "已识别为视频链接，可直接用下方按钮处理。";
+            return;
+        }
+
+        var keyword = BilibiliSearch.BuildKeyword(raw, AppendYuanQinBox.IsChecked == true);
+        SearchButton.IsEnabled = false;
+        SearchStatusText.Text = $"正在搜索「{keyword}」…";
+        try
+        {
+            searchResults = await BilibiliSearch.SearchAsync(keyword, 1, CookiesBox.Text.Trim());
+            var hasResults = searchResults.Count > 0;
+            SearchResultsView.ItemsSource = searchResults;
+            SearchResultsView.Visibility = hasResults ? Visibility.Visible : Visibility.Collapsed;
+            SearchActions.Visibility = hasResults ? Visibility.Visible : Visibility.Collapsed;
+            if (hasResults) SearchResultsView.SelectedIndex = 0;
+            SearchStatusText.Text = hasResults
+                ? $"按「{keyword}」找到 {searchResults.Count} 个视频，选中后点「扒谱选中视频」。"
+                : $"没有找到「{keyword}」相关视频。";
+            _ = LoadCoversAsync(searchResults);
+        }
+        catch (Exception ex)
+        {
+            SearchResultsView.Visibility = Visibility.Collapsed;
+            SearchActions.Visibility = Visibility.Collapsed;
+            SearchStatusText.Text = "搜索失败：" + ex.Message;
+        }
+        finally
+        {
+            SearchButton.IsEnabled = true;
+        }
+    }
+
+    private static async Task LoadCoversAsync(List<BilibiliVideo> videos)
+    {
+        using var gate = new SemaphoreSlim(4);
+        var tasks = videos.Where(v => !string.IsNullOrWhiteSpace(v.Pic)).Select(async video =>
+        {
+            await gate.WaitAsync();
+            try
+            {
+                video.Cover = await BilibiliSearch.LoadCoverAsync(video.Pic);
+            }
+            catch
+            {
+                // 单张封面失败不影响搜索结果本身。
+            }
+            finally
+            {
+                gate.Release();
+            }
+        });
+        await Task.WhenAll(tasks);
+    }
+
+    private BilibiliVideo? SelectedSearchResult => SearchResultsView.SelectedItem as BilibiliVideo;
+
+    private void UseSearchResult_Click(object sender, RoutedEventArgs e)
+    {
+        if (SelectedSearchResult is not { } video) return;
+        UrlBox.Text = video.Url;
+        SearchStatusText.Text = "已填入链接：" + video.Title;
+    }
+
+    private void SearchResultsView_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e) => UseSearchResult_Click(sender, e);
+
+    private async void TranscribeSearchResult_Click(object sender, RoutedEventArgs e)
+    {
+        if (SelectedSearchResult is not { } video) return;
+        UrlBox.Text = video.Url;
+        await RunAsync("full_pipeline", video.SuggestedName);
+    }
+
     private async Task RefreshModelStatusAsync()
     {
         if (App.Backend.IsRunning) return;
@@ -89,7 +190,7 @@ public sealed partial class DownloadPage : Page
         });
     }
 
-    private async Task RunAsync(string action)
+    private async Task RunAsync(string action, string? fileNameHint = null)
     {
         var urls = UrlBox.Text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
             .Select(x => x.Trim()).Where(x => x.Length > 0).ToList();
@@ -112,6 +213,7 @@ public sealed partial class DownloadPage : Page
             PreserveDuration = PreserveBox.IsChecked == true,
             MinGapMs = double.IsNaN(MinGapBox.Value) ? 60 : (int)MinGapBox.Value,
             Model = (ModelBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "basic_pitch_onnx",
+            FileNameHint = fileNameHint,
         };
 
         try

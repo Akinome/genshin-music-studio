@@ -22,6 +22,7 @@ public sealed class BackendRequest
     [JsonPropertyName("preserve_duration")] public bool PreserveDuration { get; set; } = true;
     [JsonPropertyName("model")] public string? Model { get; set; } = "basic_pitch_onnx";
     [JsonPropertyName("install_targets")] public List<string>? InstallTargets { get; set; }
+    [JsonPropertyName("file_name_hint")] public string? FileNameHint { get; set; }
 }
 
 public sealed class StudioEvent

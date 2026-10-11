@@ -19,6 +19,7 @@
 Genshin Music Studio 是一个 WinUI 3 桌面应用，用于：
 
 - 从 Bilibili、YouTube 等 yt-dlp 支持的网站下载音频
+- 在软件内直接搜索 Bilibili 视频（带封面预览），关键词可默认追加「原琴」，选中结果一键扒谱
 - 使用多种模型进行 AI 扒谱
 - 输出 `raw / optimized / genshin` 三份 MIDI
 - 对 MIDI 做节拍量化、调性修正、碎片音合并和主旋律提取
@@ -40,6 +41,18 @@ Genshin Music Studio 是一个 WinUI 3 桌面应用，用于：
 | 环境与安装 | 谱库与模型评估 |
 |---|---|
 | ![环境与安装](docs/images/environment.png) | ![谱库](docs/images/library.png) |
+
+## 应用内 B 站搜索
+
+不用离开软件，在「链接一键处理」页顶部的搜索框输入关键词就能搜 B 站视频，结果列表带封面、UP 主、时长和播放量：
+
+![应用内 B 站搜索](docs/images/bilibili-search.png)
+
+- 勾选「关键词默认加「原琴」」后，搜索会自动拼成 `关键词 原琴`，开关状态会被记住
+- 也可以直接粘贴 BV 号或完整链接，会跳过搜索直接使用
+- 选中结果后可以「填入链接」，或者点「扒谱选中视频」直接走完整流水线
+- 搜索结果按「UP主 - 标题」命名输出，和常见原琴曲库的组织方式一致
+- 搜索为原生 C# 实现（含 wbi 签名），只依赖网络，不需要 Python；如果遇到风控可以在下载页复用已有的 cookies.txt
 
 ## 支持的模型
 

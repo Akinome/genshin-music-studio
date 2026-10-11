@@ -12,6 +12,7 @@ public sealed class AppSettingsData
     [JsonPropertyName("volume")] public double? Volume { get; set; }
     [JsonPropertyName("velocity_boost")] public double? VelocityBoost { get; set; }
     [JsonPropertyName("audio_instrument")] public string? AudioInstrument { get; set; }
+    [JsonPropertyName("search_default_yuanqin")] public bool? SearchDefaultYuanQin { get; set; }
 }
 
 public sealed class LibraryFolderData

@@ -83,6 +83,7 @@ public static class NativeStudioService
         var urls = request.Urls ?? new List<string>();
         var work = request.WorkDir ?? Path.Combine(StudioBackendClient.RepoRoot, "工作区");
         var output = request.OutDir ?? Path.Combine(StudioBackendClient.RepoRoot, "AI扒谱输出");
+        var nameHint = urls.Count == 1 ? SafeBaseName(request.FileNameHint) : null;
         for (var i = 0; i < urls.Count; i++)
         {
             emit?.Invoke(new StudioEvent { Type = "status", Text = $"原生处理 {i + 1}/{urls.Count}" });
@@ -91,7 +92,7 @@ public static class NativeStudioService
                 text => emit?.Invoke(new StudioEvent { Type = "log", Text = text }), cancellationToken);
             foreach (var audioPath in files)
             {
-                await TranscribeAndConvertAsync(audioPath, work, output, request.MinGapMs, emit, cancellationToken);
+                await TranscribeAndConvertAsync(audioPath, work, output, request.MinGapMs, emit, cancellationToken, nameHint);
             }
             emit?.Invoke(new StudioEvent { Type = "progress", Value = (i + 1) * 100.0 / Math.Max(1, urls.Count) });
         }
@@ -105,6 +106,7 @@ public static class NativeStudioService
         var urls = request.Urls ?? new List<string>();
         var work = request.WorkDir ?? Path.Combine(StudioBackendClient.RepoRoot, "工作区");
         var outDir = request.OutDir ?? Path.Combine(StudioBackendClient.RepoRoot, "AI扒谱输出");
+        var nameHint = urls.Count == 1 ? SafeBaseName(request.FileNameHint) : null;
         Directory.CreateDirectory(outDir);
         for (var i = 0; i < urls.Count; i++)
         {
@@ -116,7 +118,8 @@ public static class NativeStudioService
             {
                 using var engine = new BasicPitchNative(FindModelPath());
                 var notes = await engine.TranscribeAsync(audioPath, cancellationToken: cancellationToken);
-                var output = Path.Combine(outDir, Path.GetFileNameWithoutExtension(audioPath) + "_basic_pitch_native.mid");
+                var baseName = nameHint ?? Path.GetFileNameWithoutExtension(audioPath);
+                var output = Path.Combine(outDir, baseName + "_basic_pitch_native.mid");
                 NativeMidiWriter.WriteNotes(output, notes, notes.Count == 0 ? 0 : notes.Max(n => n.End));
                 emit?.Invoke(new StudioEvent { Type = "log", Text = $"AI 扒谱完成：{notes.Count} 个音符 -> {output}" });
             }
@@ -152,7 +155,7 @@ public static class NativeStudioService
     }
 
     private static async Task TranscribeAndConvertAsync(string input, string workDir, string outDir, int minGapMs,
-        Action<StudioEvent>? emit, CancellationToken cancellationToken)
+        Action<StudioEvent>? emit, CancellationToken cancellationToken, string? fileNameHint = null)
     {
         Directory.CreateDirectory(workDir);
         Directory.CreateDirectory(outDir);
@@ -161,7 +164,7 @@ public static class NativeStudioService
         var rawNotes = await engine.TranscribeAsync(input, cancellationToken: cancellationToken);
         if (rawNotes.Count == 0) throw new InvalidOperationException("没有识别到音符。");
         var duration = rawNotes.Max(n => n.End);
-        var baseName = Path.GetFileNameWithoutExtension(input);
+        var baseName = fileNameHint ?? Path.GetFileNameWithoutExtension(input);
         var rawDir = Path.Combine(outDir, "raw");
         var optimizedDir = Path.Combine(outDir, "optimized");
         var genshinDir = Path.Combine(outDir, "genshin");
@@ -182,6 +185,15 @@ public static class NativeStudioService
         var outputMidi = Path.Combine(genshinDir, baseName + "_genshin.mid");
         NativeMidiWriter.WriteNotes(outputMidi, melody, duration);
         emit?.Invoke(new StudioEvent { Type = "log", Text = $"主旋律完成：{melody.Count} 个音符" });
+    }
+
+    private static string? SafeBaseName(string? hint)
+    {
+        if (string.IsNullOrWhiteSpace(hint)) return null;
+        var invalid = Path.GetInvalidFileNameChars();
+        var cleaned = new string(hint.Where(c => !invalid.Contains(c)).ToArray()).Trim();
+        if (cleaned.Length > 120) cleaned = cleaned[..120].Trim();
+        return cleaned.Length == 0 ? null : cleaned;
     }
 
     private static string FindModelPath()

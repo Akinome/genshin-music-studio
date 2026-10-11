@@ -5,11 +5,58 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:services="using:GenshinMusicStudio_WinUI.Services"
     mc:Ignorable="d">
     <ScrollViewer>
         <StackPanel Padding="24,18,24,24" Spacing="14">
             <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="链接一键处理" />
             <TextBlock Text="下载音频或视频，调用 Basic Pitch 扒谱，再提取成原神纯旋律 MIDI。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+            <Border Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="B 站搜索" FontWeight="SemiBold" />
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="SearchBox" PlaceholderText="输入关键词、BV 号或链接，例如：起风了 钢琴" KeyDown="SearchBox_KeyDown" />
+                        <Button x:Name="SearchButton" Grid.Column="1" Content="搜索" Style="{StaticResource AccentButtonStyle}" Click="Search_Click" />
+                    </Grid>
+                    <CheckBox x:Name="AppendYuanQinBox" Content="关键词默认加「原琴」" IsChecked="True"
+                              Checked="AppendYuanQin_Changed" Unchecked="AppendYuanQin_Changed" />
+                    <TextBlock x:Name="SearchStatusText" TextWrapping="Wrap" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="搜索后选中结果，可直接扒谱；输出按「UP主 - 标题」命名。" />
+                    <ListView x:Name="SearchResultsView" MaxHeight="240" SelectionMode="Single" Visibility="Collapsed"
+                              DoubleTapped="SearchResultsView_DoubleTapped">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="services:BilibiliVideo">
+                                <Grid ColumnSpacing="10" Padding="0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="120" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="120" Height="68" CornerRadius="4"
+                                            Background="{ThemeResource CardBackgroundBrush}">
+                                        <Image Source="{x:Bind Cover, Mode=OneWay}" Stretch="UniformToFill" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind Title}" FontWeight="SemiBold"
+                                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{x:Bind Meta}" FontSize="12"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <StackPanel x:Name="SearchActions" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
+                        <Button Content="填入链接" Click="UseSearchResult_Click" />
+                        <Button Content="扒谱选中视频" Style="{StaticResource AccentButtonStyle}" Click="TranscribeSearchResult_Click" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
 
             <Border Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
                 <StackPanel Spacing="8">

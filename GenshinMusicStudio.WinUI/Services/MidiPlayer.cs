@@ -282,44 +282,57 @@ public sealed class MidiPlayer : IDisposable
 
             fileRanges = new List<(double Start, double Duration)>();
             var events = BuildPlaylistEvents(playlist, fileRanges);
-            var clock = Stopwatch.StartNew();
-            playbackClock = clock;
             var total = events.Count > 0 ? events[^1].Time : 0;
             currentDuration = total;
+
+            // Start the clock only once the synth and playlist are ready, so
+            // device setup time is never counted as playback time.
+            var clock = Stopwatch.StartNew();
+            playbackClock = clock;
+            var index = 0;
             var lastReport = -1.0;
-            var lead = activeInstrument?.LatencySeconds ?? 0.02;
-            foreach (var evt in events)
+            while (index < events.Count)
             {
                 if (stopRequested) return;
-                if (evt.Time < startFrom - 0.001) continue;
-                var wait = evt.Time - startFrom - lead - clock.Elapsed.TotalSeconds;
-                if (wait > 0) Thread.Sleep((int)Math.Min(wait * 1000, 500));
-                if (stopRequested) return;
-                if (evt.Time - lastReport >= 0.25)
+                var position = startFrom + clock.Elapsed.TotalSeconds;
+                while (index < events.Count && events[index].Time - startFrom <= position)
                 {
-                    lastReport = evt.Time;
-                    ReportProgress(startFrom + clock.Elapsed.TotalSeconds, total);
-                }
-                if (evt.IsOn)
-                {
-                    if (activeInstrument is not null)
+                    var evt = events[index++];
+                    if (evt.Time < startFrom - 0.001) continue;
+                    if (evt.IsOn)
                     {
-                        activeInstrument.PlayKey(evt.Pitch, Math.Clamp(velocityBoost, 0.1, 1.0));
+                        if (activeInstrument is not null)
+                        {
+                            activeInstrument.PlayKey(evt.Pitch, Math.Clamp(velocityBoost, 0.1, 1.0));
+                        }
+                        else
+                        {
+                            midiOutShortMsg(handle, ScaleVelocity(0x90 | (Key21Layout.FoldPitch(evt.Pitch) << 8) | (evt.Velocity << 16), velocityBoost));
+                        }
+                    }
+                    else if (activeInstrument is not null)
+                    {
+                        activeInstrument.NoteOff(evt.Pitch);
                     }
                     else
                     {
-                        midiOutShortMsg(handle, ScaleVelocity(0x90 | (Key21Layout.FoldPitch(evt.Pitch) << 8) | (evt.Velocity << 16), velocityBoost));
+                        midiOutShortMsg(handle, 0x80 | (Key21Layout.FoldPitch(evt.Pitch) << 8));
                     }
                 }
-                else if (activeInstrument is not null)
+
+                if (position - lastReport >= 0.2)
                 {
-                    activeInstrument.NoteOff(evt.Pitch);
+                    lastReport = position;
+                    ReportProgress(position, total);
                 }
-                else
-                {
-                    midiOutShortMsg(handle, 0x80 | (Key21Layout.FoldPitch(evt.Pitch) << 8));
-                }
+
+                if (index >= events.Count) break;
+                var nextDue = events[index].Time - startFrom;
+                var remaining = nextDue - clock.Elapsed.TotalSeconds;
+                // Sleep in small slices so progress keeps moving through long rests.
+                Thread.Sleep(remaining > 0.05 ? 10 : 1);
             }
+            ReportProgress(total, total);
 
             var tail = (total - startFrom) + 0.8 - clock.Elapsed.TotalSeconds;
             while (tail > 0 && !stopRequested)
@@ -335,6 +348,7 @@ public sealed class MidiPlayer : IDisposable
         }
         finally
         {
+            playbackClock?.Stop();
             playbackClock = null;
             if (activeInstrument is null)
             {

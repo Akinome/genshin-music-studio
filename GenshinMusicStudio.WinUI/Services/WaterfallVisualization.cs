@@ -44,6 +44,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private double keyboardHeight = 48;
     private Canvas? canvas;
     private Canvas? keybed;
+    private ScrollViewer? scroller;
     private Grid? viewport;
     private TranslateTransform? transform;
     private double renderBase;
@@ -71,18 +72,32 @@ public sealed class WaterfallVisualization : IMidiVisualization
 
         owner.Children.Clear();
 
+        scroller = new ScrollViewer
+        {
+            VerticalScrollMode = ScrollMode.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            HorizontalScrollMode = ScrollMode.Enabled,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            ZoomMode = ZoomMode.Disabled,
+        };
+        owner.Children.Add(scroller);
+
         canvas = new Canvas { VerticalAlignment = VerticalAlignment.Bottom };
         transform = new TranslateTransform();
         canvas.RenderTransform = transform;
-        owner.Children.Add(canvas);
+        scroller.Content = canvas;
 
-        // The keybed sits in the same canvas but with its own inverse offset so
-        // it never moves while the note layer scrolls.
-        keybed = new Canvas { IsHitTestVisible = false };
+        // The keybed lives outside the scroller so it never moves.
+        keybed = new Canvas
+        {
+            VerticalAlignment = VerticalAlignment.Bottom,
+            IsHitTestVisible = false,
+        };
         owner.Children.Add(keybed);
 
         renderBase = 0;
         RenderWindow(0);
+        RenderKeybed();
     }
 
     public void RenderIdle()
@@ -122,6 +137,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
         renderBase = 0;
         if (transform is not null) transform.Y = 0;
         RenderWindow(0);
+        RenderKeybed();
     }
 
     private void ApplyPitchRange()
@@ -192,7 +208,6 @@ public sealed class WaterfallVisualization : IMidiVisualization
             canvas.Children.Add(rect);
         }
 
-        RenderKeybed();
     }
 
     /// <summary>
@@ -208,13 +223,11 @@ public sealed class WaterfallVisualization : IMidiVisualization
         var contentWidth = GetContentWidth(viewportWidth);
         var left = (viewportWidth - contentWidth) / 2;
         keyboardHeight = Math.Clamp(whiteKeyWidth * 2.4, 28, 58);
-        var top = viewportHeight - keyboardHeight;
 
         keybed.Width = viewportWidth;
-        keybed.Height = viewportHeight;
+        keybed.Height = keyboardHeight;
         keybed.Children.Clear();
         keyRects.Clear();
-        pressedKeys.Clear();
 
         var low = (int)Math.Floor(minPitch);
         var high = (int)Math.Ceiling(maxPitch);
@@ -226,7 +239,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
             Fill = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 236, 236, 240)),
         };
         Canvas.SetLeft(backing, left);
-        Canvas.SetTop(backing, top);
+        Canvas.SetTop(backing, 0);
         keybed.Children.Add(backing);
 
         for (var pitch = low; pitch <= high; pitch++)
@@ -242,7 +255,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
                 Tag = pitch,
             };
             Canvas.SetLeft(rect, left + PitchToX(pitch) + 0.5);
-            Canvas.SetTop(rect, top);
+            Canvas.SetTop(rect, 0);
             keybed.Children.Add(rect);
             keyRects[pitch] = rect;
         }
@@ -263,12 +276,12 @@ public sealed class WaterfallVisualization : IMidiVisualization
                 Tag = pitch,
             };
             Canvas.SetLeft(rect, centerX - blackWidth / 2);
-            Canvas.SetTop(rect, top);
+            Canvas.SetTop(rect, 0);
             keybed.Children.Add(rect);
             keyRects[pitch] = rect;
         }
 
-        RenderKeyLabels(left, top, blackHeight);
+        RenderKeyLabels(left, 0, blackHeight);
     }
 
     /// <summary>Sharp names sit on the black keys, natural names at the bottom of white keys.</summary>

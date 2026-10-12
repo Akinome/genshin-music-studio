@@ -4,7 +4,11 @@
 
 <h1 align="center">Genshin Music Studio</h1>
 
+<p align="center"><b>原神自动弹奏琴谱工作台 · 原神自动演奏 MIDI 生成</b></p>
+
 <p align="center">Windows 原生 AI 扒谱、MIDI 优化与原神琴谱转换工具</p>
+
+<p align="center">把喜欢的歌变成原神里能弹的琴谱：AI 扒谱 → MIDI 优化 → 折叠到风物之诗琴音域 → 输出可直接用于<b>原神自动弹奏 / 自动演奏</b>工具的 MIDI。</p>
 
 <p align="center">
   <a href="https://github.com/Akinome/genshin-music-studio/releases/latest"><img src="https://img.shields.io/github/v/release/Akinome/genshin-music-studio" alt="Release"></a>
@@ -20,6 +24,7 @@ Genshin Music Studio 是一个 WinUI 3 桌面应用，用于：
 
 - 从 Bilibili、YouTube 等 yt-dlp 支持的网站下载音频
 - 在软件内直接搜索 Bilibili 视频（带封面预览），关键词可默认追加「原琴」，选中结果一键扒谱
+- 生成可直接用于原神自动弹奏 / 自动演奏工具的单音琴谱 MIDI（和弦拆琶音、限制在风物之诗琴音域）
 - 使用多种模型进行 AI 扒谱
 - 输出 `raw / optimized / genshin` 三份 MIDI
 - 对 MIDI 做节拍量化、调性修正、碎片音合并和主旋律提取
@@ -31,6 +36,23 @@ Genshin Music Studio 是一个 WinUI 3 桌面应用，用于：
 - 21 键键盘模式使用原神游戏采样的 12 种乐器发声，键位随演奏点亮
 
 > AI 扒谱结果取决于音频质量、混音复杂度、模型和参数。项目不承诺所有歌曲都能 100% 还原。
+
+## 原神自动弹奏 / 自动演奏
+
+本工具不是自动弹奏器本身，而是负责把歌**变成自动弹奏器能直接用的琴谱 MIDI**。想要在游戏里自动弹奏，按下面三步走：
+
+1. 在「链接一键处理」页粘贴 Bilibili / YouTube 链接，或选择本地音频、视频、MIDI
+2. 跑一次 AI 扒谱 + 转换，得到 `genshin` 目录下的 `歌名_genshin.mid`
+3. 把这个 MIDI 喂给你惯用的**原神自动弹奏 / 自动演奏**工具即可
+
+输出的 MIDI 已经按自动弹奏工具的要求处理好：
+
+- **单音**：游戏内一次只能弹一个音，和弦会自动拆成琶音或只保留主旋律
+- **琴音域**：所有音符折叠到风物之诗琴音域（默认 C3–B5，可配置）
+- **按键间隔**：可设定最短间隔并自动放慢，避免音符过密按不过来
+- **标准 MIDI**：单轨 Type 0，兼容绝大多数自动弹奏工具
+
+不需要自动弹奏工具时，应用内也自带播放页，可以直接试听转换结果。
 
 ## 界面截图
 
@@ -225,6 +247,10 @@ docs/images/                README 截图
 - 复杂混音、混响重的录音和现场版本更容易识别错误
 - MT3 和 Omnizart 暂未集成
 - yt-dlp 和 ffmpeg 需要单独安装
+
+## 关键词
+
+原神自动弹奏 · 原神自动演奏 · 原神自动弹琴 · 原神琴谱 · 原神弹琴脚本 · 风物之诗琴 · 诗琴 · 晚风圆号 · 原神 MIDI 转换 · 音频转琴谱 · AI 扒谱 · B 站视频转 MIDI · MIDI 转原神 · Genshin Impact lyre · genshin autoplay
 
 ## 许可证与致谢
 

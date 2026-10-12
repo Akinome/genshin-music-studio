@@ -44,14 +44,17 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private Canvas? canvas;
     private Canvas? keybed;
     private TranslateTransform? keybedCounter;
-    private ScrollViewer? scroller;
+    private TranslateTransform? panTransform;
+    private double panX;
+    private double panMin;
+    private double panMax;
     private Grid? viewport;
     private TranslateTransform? transform;
     private double renderBase;
     private double lastHighlight;
     private bool dragging;
     private double dragStartX;
-    private double dragStartOffset;
+    private double dragStartPanX;
 
     public string Name => "瀑布流";
 
@@ -75,23 +78,20 @@ public sealed class WaterfallVisualization : IMidiVisualization
 
         owner.Children.Clear();
 
-        scroller = new ScrollViewer
-        {
-            VerticalScrollMode = ScrollMode.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            HorizontalScrollMode = ScrollMode.Enabled,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            ZoomMode = ZoomMode.Disabled,
-        };
-        scroller.ViewChanged += (_, _) => SyncKeybedPan();
-        scroller.PointerPressed += Scroller_PointerPressed;
-        scroller.PointerMoved += Scroller_PointerMoved;
-        scroller.PointerReleased += Scroller_PointerReleased;
-        scroller.PointerCaptureLost += Scroller_PointerCaptureLost;
-        owner.Children.Add(scroller);
+        // The viewport itself handles dragging, so no ScrollViewer is needed and
+        // nothing can swallow the pointer gestures.
+        owner.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+        owner.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(Scroller_PointerPressed), true);
+        owner.AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler(Scroller_PointerMoved), true);
+        owner.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(Scroller_PointerReleased), true);
+        owner.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler(Scroller_PointerCaptureLost), true);
 
         contentHost = new Canvas();
-        scroller.Content = contentHost;
+        contentHost.HorizontalAlignment = HorizontalAlignment.Left;
+        contentHost.VerticalAlignment = VerticalAlignment.Top;
+        panTransform = new TranslateTransform();
+        contentHost.RenderTransform = panTransform;
+        owner.Children.Add(contentHost);
 
         // Notes scroll vertically inside the host.
         canvas = new Canvas();
@@ -99,8 +99,8 @@ public sealed class WaterfallVisualization : IMidiVisualization
         canvas.RenderTransform = transform;
         contentHost.Children.Add(canvas);
 
-        // The keybed sits outside the scroller so it can never move vertically;
-        // it follows horizontal scrolling via its own offset instead.
+        // The keybed sits outside the scrolling content so it never moves
+        // vertically; it mirrors the horizontal pan to stay aligned.
         keybed = new Canvas
         {
             VerticalAlignment = VerticalAlignment.Bottom,
@@ -185,12 +185,20 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private void RenderWindow(double baseTime)
     {
         if (canvas is null) return;
-        var scrollOffset = scroller?.HorizontalOffset ?? 0;
         var viewportWidth = SafeWidth();
         var viewportHeight = SafeHeight();
         var contentWidth = GetContentWidth(viewportWidth);
         var canvasWidth = Math.Max(viewportWidth, contentWidth);
-        var noteLeft = contentWidth <= viewportWidth ? (viewportWidth - contentWidth) / 2 : 0;
+        // Centre the sheet when it fits, otherwise clamp the pan to its edges.
+        panMin = Math.Min(0, viewportWidth - contentWidth);
+        panMax = Math.Max(0, (viewportWidth - contentWidth) / 2);
+        if (contentWidth <= viewportWidth)
+        {
+            panX = panMax;
+        }
+        panX = Math.Clamp(panX, panMin, panMax);
+        if (panTransform is not null) panTransform.X = panX;
+        var noteLeft = 0.0;
         var canvasHeight = viewportHeight;
         // Notes stop at the top edge of the keybed, so that edge is the hit line.
         var hitY = canvasHeight - keyboardHeight;
@@ -247,49 +255,46 @@ public sealed class WaterfallVisualization : IMidiVisualization
             canvas.Children.Add(rect);
         }
 
-        if (scroller is not null && scrollOffset > 0)
-        {
-            scroller.ChangeView(scrollOffset, null, null, true);
-        }
+        SyncKeybedPan();
     }
 
     /// <summary>Keeps the keybed aligned with the horizontally scrolled sheet.</summary>
     private void SyncKeybedPan()
     {
         if (keybedCounter is null) return;
-        keybedCounter.X = -(scroller?.HorizontalOffset ?? 0);
+        keybedCounter.X = panX;
         keybedCounter.Y = 0;
     }
 
-    /// <summary>Mouse drag pans the sheet sideways; touch uses the built-in panning.</summary>
+    /// <summary>Press anywhere on the sheet to start dragging it sideways.</summary>
     private void Scroller_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        if (scroller is null) return;
-        var point = e.GetCurrentPoint(scroller);
+        if (viewport is null || panMax <= panMin) return;
+        var point = e.GetCurrentPoint(viewport);
         if (e.Pointer.PointerDeviceType == Microsoft.UI.Input.PointerDeviceType.Touch) return;
         if (!point.Properties.IsLeftButtonPressed) return;
-        // Leave the bottom strip to the scrollbar so its thumb stays draggable.
-        if (point.Position.Y > scroller.ActualHeight - 18) return;
         dragging = true;
         dragStartX = point.Position.X;
-        dragStartOffset = scroller.HorizontalOffset;
-        scroller.CapturePointer(e.Pointer);
+        dragStartPanX = panX;
+        viewport.CapturePointer(e.Pointer);
         e.Handled = true;
     }
 
     private void Scroller_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
-        if (!dragging || scroller is null) return;
-        var x = e.GetCurrentPoint(scroller).Position.X;
-        scroller.ChangeView(dragStartOffset - (x - dragStartX), null, null, true);
+        if (!dragging || viewport is null) return;
+        var x = e.GetCurrentPoint(viewport).Position.X;
+        panX = Math.Clamp(dragStartPanX + (x - dragStartX), panMin, panMax);
+        if (panTransform is not null) panTransform.X = panX;
+        SyncKeybedPan();
         e.Handled = true;
     }
 
     private void Scroller_PointerReleased(object sender, PointerRoutedEventArgs e)
     {
-        if (!dragging || scroller is null) return;
+        if (!dragging || viewport is null) return;
         dragging = false;
-        scroller.ReleasePointerCapture(e.Pointer);
+        viewport.ReleasePointerCapture(e.Pointer);
         e.Handled = true;
     }
 
@@ -306,7 +311,8 @@ public sealed class WaterfallVisualization : IMidiVisualization
         var viewportWidth = SafeWidth();
         var viewportHeight = SafeHeight();
         var contentWidth = GetContentWidth(viewportWidth);
-        var left = contentWidth <= viewportWidth ? (viewportWidth - contentWidth) / 2 : 0;
+        // Centring is handled by the shared pan offset, so content coordinates start at 0.
+        const double left = 0;
         keyboardHeight = Math.Clamp(whiteKeyWidth * 2.4, 28, 58);
         const double top = 0;
         SyncKeybedPan();

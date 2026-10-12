@@ -26,8 +26,6 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private static readonly Windows.UI.Color BlackKeyFill = Windows.UI.Color.FromArgb(255, 8, 8, 10);
     private static readonly Windows.UI.Color BlackKeyBorder = Windows.UI.Color.FromArgb(255, 0, 0, 0);
     private static readonly Windows.UI.Color BlackKeyText = Windows.UI.Color.FromArgb(255, 236, 146, 46);
-    private static readonly Windows.UI.Color PressedWhite = Windows.UI.Color.FromArgb(255, 232, 163, 61);
-    private static readonly Windows.UI.Color PressedBlack = Windows.UI.Color.FromArgb(255, 120, 78, 20);
 
     private static readonly string[] NoteNames = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
@@ -429,10 +427,30 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private static void ApplyKeyVisual(int pitch, Rectangle key, bool pressed)
     {
         var sharp = IsSharp(pitch);
+        // Use the Windows accent colour so the highlight matches the accent
+        // styled buttons (play/pause) instead of a separate hard-coded colour.
+        var accent = AccentColor();
         key.Fill = new SolidColorBrush(pressed
-            ? sharp ? PressedBlack : PressedWhite
+            ? sharp ? Darken(accent, 0.68) : accent
             : sharp ? BlackKeyFill : WhiteKeyFill);
     }
+
+    private static Windows.UI.Color AccentColor()
+    {
+        if (Application.Current.Resources.TryGetValue("AccentBlueBrush", out var value)
+            && value is SolidColorBrush brush)
+        {
+            return brush.Color;
+        }
+        return Windows.UI.Color.FromArgb(255, 59, 130, 246);
+    }
+
+    private static Windows.UI.Color Darken(Windows.UI.Color color, double factor) =>
+        Windows.UI.Color.FromArgb(
+            color.A,
+            (byte)(color.R * factor),
+            (byte)(color.G * factor),
+            (byte)(color.B * factor));
 
     private void ReleasePressedKeys()
     {

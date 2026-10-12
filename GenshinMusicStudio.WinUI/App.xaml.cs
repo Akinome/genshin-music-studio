@@ -57,10 +57,31 @@ public partial class App : Application
     /// <param name="args">Details about the launch request and process.</param>
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
+        ApplySystemAccent();
         MainWindow = new MainWindow();
         _window = MainWindow;
         _window.Activate();
         RestoreDefaultInstrument();
+    }
+
+    /// <summary>
+    /// Publishes the Windows accent colour as the app's accent brush so custom
+    /// drawing (waterfall notes, key highlights) matches the built-in
+    /// accent-styled buttons instead of a hard-coded colour.
+    /// </summary>
+    private static void ApplySystemAccent()
+    {
+        try
+        {
+            var settings = new Windows.UI.ViewManagement.UISettings();
+            var accent = settings.GetColorValue(Windows.UI.ViewManagement.UIColorType.Accent);
+            Application.Current.Resources["AccentBlueBrush"] =
+                new Microsoft.UI.Xaml.Media.SolidColorBrush(accent);
+        }
+        catch
+        {
+            // Fall back to the brush defined in App.xaml.
+        }
     }
 
     private static void RestoreDefaultInstrument()

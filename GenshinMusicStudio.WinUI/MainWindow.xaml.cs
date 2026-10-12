@@ -9,11 +9,17 @@ using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
 using Windows.Graphics;
 using Windows.UI;
+using System.Runtime.InteropServices;
 
 namespace GenshinMusicStudio_WinUI;
 
 public sealed partial class MainWindow : Window
 {
+    private const int DwmwaBorderColor = 34;
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
     private bool logExpanded = false;
 
     public MainWindow()
@@ -34,6 +40,8 @@ public sealed partial class MainWindow : Window
             AppWindow.SetIcon(iconPath);
         }
         ApplyTheme(Application.Current.RequestedTheme == ApplicationTheme.Dark);
+        ApplyAccentWindowFrame();
+        Activated += (_, _) => ApplyAccentWindowFrame();
         UpdateLogToggleStyle();
         AppTitleBar.Loaded += (_, _) => UpdateTitleBarDragRegion();
         App.Backend.EventReceived += Backend_EventReceived;
@@ -139,7 +147,30 @@ public sealed partial class MainWindow : Window
         titleBar.ButtonInactiveForegroundColor = dark ? Color.FromArgb(255, 160, 160, 160) : Color.FromArgb(255, 120, 120, 120);
         titleBar.ButtonHoverBackgroundColor = dark ? Color.FromArgb(45, 255, 255, 255) : Color.FromArgb(25, 0, 0, 0);
         titleBar.ButtonHoverForegroundColor = dark ? Colors.White : Colors.Black;
+        ApplyAccentWindowFrame();
         UpdateLogToggleStyle();
+    }
+
+    /// <summary>
+    /// Windows draws the window outline from its own DWM colour, which can differ
+    /// from the accent used by apps. Pinning DWMWA_BORDER_COLOR to the accent
+    /// keeps the frame consistent with the rest of the UI.
+    /// </summary>
+    private void ApplyAccentWindowFrame()
+    {
+        try
+        {
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            if (hwnd == IntPtr.Zero) return;
+            var settings = new Windows.UI.ViewManagement.UISettings();
+            var accent = settings.GetColorValue(Windows.UI.ViewManagement.UIColorType.Accent);
+            var colorRef = accent.R | (accent.G << 8) | (accent.B << 16);
+            DwmSetWindowAttribute(hwnd, DwmwaBorderColor, ref colorRef, sizeof(int));
+        }
+        catch
+        {
+            // Older Windows builds ignore the attribute; nothing else to do.
+        }
     }
 
     private void UpdateTitleBarDragRegion()

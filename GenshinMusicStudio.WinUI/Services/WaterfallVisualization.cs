@@ -18,8 +18,6 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private const double MinWhiteKeyWidth = 11;
     private const double MaxWhiteKeyWidth = 40;
     private const double FixedWhiteKeyWidth = 24;
-    private const double BlackKeyWidthRatio = 0.62;
-    private const double BlackKeyHeightRatio = 0.62;
     private const int DefaultLowPitch = 48;
     private const int DefaultHighPitch = 83;
 
@@ -280,50 +278,31 @@ public sealed class WaterfallVisualization : IMidiVisualization
         Canvas.SetTop(backing, top);
         keybed.Children.Add(backing);
 
+        // Every semitone gets one equal-sized key, laid side by side. Sharps are
+        // simply darker, so nothing overlaps and the row stays uniform.
         for (var pitch = low; pitch <= high; pitch++)
         {
-            if (IsSharp(pitch)) continue;
+            var sharp = IsSharp(pitch);
             var rect = new Rectangle
             {
-                Width = Math.Max(3, whiteKeyWidth - 1),
-                Height = keyboardHeight,
-                Fill = new SolidColorBrush(WhiteKeyFill),
-                Stroke = new SolidColorBrush(WhiteKeyBorder),
+                Width = Math.Max(3, whiteKeyWidth - 2),
+                Height = keyboardHeight - 2,
+                Fill = new SolidColorBrush(sharp ? BlackKeyFill : WhiteKeyFill),
+                Stroke = new SolidColorBrush(sharp ? BlackKeyBorder : WhiteKeyBorder),
                 StrokeThickness = 1,
                 Tag = pitch,
             };
-            Canvas.SetLeft(rect, left + PitchToX(pitch) + 0.5);
-            Canvas.SetTop(rect, top);
+            Canvas.SetLeft(rect, left + PitchToX(pitch) + 1);
+            Canvas.SetTop(rect, top + 1);
             keybed.Children.Add(rect);
             keyRects[pitch] = rect;
         }
 
-        var blackWidth = Math.Max(3, whiteKeyWidth * BlackKeyWidthRatio);
-        var blackHeight = keyboardHeight * BlackKeyHeightRatio;
-        for (var pitch = low; pitch <= high; pitch++)
-        {
-            if (!IsSharp(pitch)) continue;
-            var centerX = left + BlackKeyCenterX(pitch);
-            var rect = new Rectangle
-            {
-                Width = blackWidth,
-                Height = blackHeight,
-                Fill = new SolidColorBrush(BlackKeyFill),
-                Stroke = new SolidColorBrush(BlackKeyBorder),
-                StrokeThickness = 1,
-                Tag = pitch,
-            };
-            Canvas.SetLeft(rect, centerX - blackWidth / 2);
-            Canvas.SetTop(rect, top);
-            keybed.Children.Add(rect);
-            keyRects[pitch] = rect;
-        }
-
-        RenderKeyLabels(left, top, blackHeight);
+        RenderKeyLabels(left, top);
     }
 
-    /// <summary>Sharp names sit on the black keys, natural names at the bottom of white keys.</summary>
-    private void RenderKeyLabels(double left, double top, double blackHeight)
+    /// <summary>Every key carries its note name, centred in the key.</summary>
+    private void RenderKeyLabels(double left, double top)
     {
         if (keybed is null) return;
         var fontSize = Math.Clamp(whiteKeyWidth * 0.3, 8, 12);
@@ -341,18 +320,9 @@ public sealed class WaterfallVisualization : IMidiVisualization
                 IsHitTestVisible = false,
             };
             label.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
-            if (IsSharp(pitch))
-            {
-                var centerX = left + BlackKeyCenterX(pitch);
-                Canvas.SetLeft(label, centerX - label.DesiredSize.Width / 2);
-                Canvas.SetTop(label, top + Math.Max(1, (blackHeight - label.DesiredSize.Height) / 2));
-            }
-            else
-            {
-                var centerX = left + PitchToX(pitch) + whiteKeyWidth / 2;
-                Canvas.SetLeft(label, centerX - label.DesiredSize.Width / 2);
-                Canvas.SetTop(label, top + keyboardHeight - label.DesiredSize.Height - 2);
-            }
+            var centerX = left + PitchToX(pitch) + whiteKeyWidth / 2;
+            Canvas.SetLeft(label, centerX - label.DesiredSize.Width / 2);
+            Canvas.SetTop(label, top + (keyboardHeight - label.DesiredSize.Height) / 2);
             keybed.Children.Add(label);
         }
     }
@@ -434,7 +404,8 @@ public sealed class WaterfallVisualization : IMidiVisualization
         return width;
     }
 
-    private double LaneWidth(int pitch) => IsSharp(pitch) ? whiteKeyWidth * BlackKeyWidthRatio : whiteKeyWidth;
+    /// <summary>Every semitone gets the same lane width, matching the uniform keys.</summary>
+    private double LaneWidth(int pitch) => whiteKeyWidth;
 
     private double PitchToX(int pitch)
     {
@@ -445,23 +416,6 @@ public sealed class WaterfallVisualization : IMidiVisualization
             x += LaneWidth(p);
         }
         return x;
-    }
-
-    /// <summary>Black keys are centred in the white-key gap they sound between.</summary>
-    private double BlackKeyCenterX(int pitch)
-    {
-        var lowerWhite = PreviousWhitePitch(pitch);
-        return (PitchToX(lowerWhite) + PitchToX(lowerWhite + 1)) / 2;
-    }
-
-    private static int PreviousWhitePitch(int pitch)
-    {
-        var candidate = pitch - 1;
-        while (candidate >= 0 && IsSharp(candidate))
-        {
-            candidate--;
-        }
-        return candidate;
     }
 
     private static bool IsSharp(int pitch)

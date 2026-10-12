@@ -15,9 +15,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private const double PixelsPerSecond = 140;
     private const double RespawnInterval = 0.5;
     private const double HighlightInterval = 0.25;
-    private const double MinWhiteKeyWidth = 11;
-    private const double MaxWhiteKeyWidth = 40;
-    private const double FixedWhiteKeyWidth = 24;
+    private const double FixedWhiteKeyWidth = 34;
     private const int DefaultLowPitch = 48;
     private const int DefaultHighPitch = 83;
 
@@ -146,6 +144,17 @@ public sealed class WaterfallVisualization : IMidiVisualization
         renderBase = 0;
         if (transform is not null) transform.Y = 0;
         RenderWindow(0);
+        RenderKeybed();
+    }
+
+    /// <summary>
+    /// Re-lays out after a viewport resize without rebuilding the scroller or
+    /// dropping the per-key press animation state.
+    /// </summary>
+    public void Resize()
+    {
+        if (canvas is null) return;
+        RenderWindow(renderBase);
         RenderKeybed();
     }
 
@@ -299,6 +308,15 @@ public sealed class WaterfallVisualization : IMidiVisualization
         }
 
         RenderKeyLabels(left, top);
+        // Re-apply the press animation to any key that is still held, so a
+        // rebuild (resize) never makes the highlight disappear.
+        foreach (var pitch in pressedKeys.ToList())
+        {
+            if (keyRects.TryGetValue(pitch, out var held))
+            {
+                ApplyKeyVisual(pitch, held, true);
+            }
+        }
     }
 
     /// <summary>Every key carries its note name, centred in the key.</summary>

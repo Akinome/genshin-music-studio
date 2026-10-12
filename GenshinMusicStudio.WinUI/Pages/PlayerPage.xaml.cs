@@ -44,14 +44,7 @@ public sealed partial class PlayerPage : Page
             {
                 Rect = new Rect(0, 0, args.NewSize.Width, args.NewSize.Height),
             };
-            if (notes.Count > 0)
-            {
-                visualization?.Initialize(RollViewport, notes, duration);
-            }
-            else
-            {
-                visualization?.RenderIdle();
-            }
+            visualization?.Resize();
         };
         Loaded += PlayerPage_Loaded;
         Unloaded += PlayerPage_Unloaded;

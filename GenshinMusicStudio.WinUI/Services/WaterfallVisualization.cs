@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 
@@ -48,6 +49,9 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private TranslateTransform? transform;
     private double renderBase;
     private double lastHighlight;
+    private bool dragging;
+    private double dragStartX;
+    private double dragStartOffset;
 
     public string Name => "瀑布流";
 
@@ -80,6 +84,10 @@ public sealed class WaterfallVisualization : IMidiVisualization
             ZoomMode = ZoomMode.Disabled,
         };
         scroller.ViewChanged += (_, _) => SyncKeybedPan();
+        scroller.PointerPressed += Scroller_PointerPressed;
+        scroller.PointerMoved += Scroller_PointerMoved;
+        scroller.PointerReleased += Scroller_PointerReleased;
+        scroller.PointerCaptureLost += Scroller_PointerCaptureLost;
         owner.Children.Add(scroller);
 
         contentHost = new Canvas();
@@ -252,6 +260,40 @@ public sealed class WaterfallVisualization : IMidiVisualization
         keybedCounter.X = -(scroller?.HorizontalOffset ?? 0);
         keybedCounter.Y = 0;
     }
+
+    /// <summary>Mouse drag pans the sheet sideways; touch uses the built-in panning.</summary>
+    private void Scroller_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (scroller is null) return;
+        var point = e.GetCurrentPoint(scroller);
+        if (e.Pointer.PointerDeviceType == Microsoft.UI.Input.PointerDeviceType.Touch) return;
+        if (!point.Properties.IsLeftButtonPressed) return;
+        // Leave the bottom strip to the scrollbar so its thumb stays draggable.
+        if (point.Position.Y > scroller.ActualHeight - 18) return;
+        dragging = true;
+        dragStartX = point.Position.X;
+        dragStartOffset = scroller.HorizontalOffset;
+        scroller.CapturePointer(e.Pointer);
+        e.Handled = true;
+    }
+
+    private void Scroller_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!dragging || scroller is null) return;
+        var x = e.GetCurrentPoint(scroller).Position.X;
+        scroller.ChangeView(dragStartOffset - (x - dragStartX), null, null, true);
+        e.Handled = true;
+    }
+
+    private void Scroller_PointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (!dragging || scroller is null) return;
+        dragging = false;
+        scroller.ReleasePointerCapture(e.Pointer);
+        e.Handled = true;
+    }
+
+    private void Scroller_PointerCaptureLost(object sender, PointerRoutedEventArgs e) => dragging = false;
 
     /// <summary>
     /// Draws the keybed at the bottom of the viewport. It lives outside the

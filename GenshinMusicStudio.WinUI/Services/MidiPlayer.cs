@@ -171,7 +171,7 @@ public sealed class MidiPlayer : IDisposable
         {
             current.Join(1500);
         }
-        Instrument?.ReleaseAll();
+        Instrument?.Suspend();
         // Silence the Windows synth too, otherwise its held notes keep ringing
         // and stack up once playback resumes.
         CloseSynthesizer();
@@ -184,6 +184,7 @@ public sealed class MidiPlayer : IDisposable
         IsPaused = false;
         stopRequested = false;
         playbackStart = pausedPosition;
+        Instrument?.ResumeOutput();
         thread = new Thread(PlayLoop) { IsBackground = true };
         thread.Start();
         PlayingChanged?.Invoke(true);
@@ -210,11 +211,18 @@ public sealed class MidiPlayer : IDisposable
     private IntPtr manualHandle;
     private bool manualOpened;
 
-    private void CloseSynthesizer()
+    private void CloseSynthesizer() => CloseSynthesizer(IntPtr.Zero);
+
+    /// <summary>
+    /// Closes the synth. When <paramref name="expectedHandle"/> is given the
+    /// close only happens if that handle is still the active one, so a finishing
+    /// playback thread can never close the handle a resumed thread just opened.
+    /// </summary>
+    private void CloseSynthesizer(IntPtr expectedHandle)
     {
         lock (gate)
         {
-            if (opened)
+            if (opened && (expectedHandle == IntPtr.Zero || handle == expectedHandle))
             {
                 for (var note = 0; note < 128; note++)
                 {
@@ -223,7 +231,7 @@ public sealed class MidiPlayer : IDisposable
                 midiOutClose(handle);
                 opened = false;
             }
-            if (manualOpened)
+            if (expectedHandle == IntPtr.Zero && manualOpened)
             {
                 for (var note = 0; note < 128; note++)
                 {
@@ -280,6 +288,7 @@ public sealed class MidiPlayer : IDisposable
     {
         var startFrom = playbackStart;
         var activeInstrument = Instrument;
+        var handleAtStart = IntPtr.Zero;
         try
         {
             if (activeInstrument is null)
@@ -290,8 +299,14 @@ public sealed class MidiPlayer : IDisposable
                     throw new InvalidOperationException("无法打开 Windows MIDI 合成器。");
                 }
                 opened = true;
+                handleAtStart = handle;
                 midiOutShortMsg(handle, 0xC0 | HarpProgram);
                 ApplyVolume();
+            }
+            else
+            {
+                // Make sure the device is running again if a pause halted it.
+                activeInstrument.ResumeOutput();
             }
 
             fileRanges = new List<(double Start, double Duration)>();
@@ -366,7 +381,7 @@ public sealed class MidiPlayer : IDisposable
             playbackClock = null;
             if (activeInstrument is null)
             {
-                CloseSynthesizer();
+                CloseSynthesizer(handleAtStart);
             }
             PlayingFolder = null;
             PlayingChanged?.Invoke(false);

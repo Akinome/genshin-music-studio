@@ -190,6 +190,37 @@ public sealed class InstrumentPlayer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Silences every voice and halts the output device. Voices are removed
+    /// outright rather than faded, so a resume right after a pause never layers
+    /// new notes on top of the old ones (which is what caused the distortion).
+    /// </summary>
+    public void Suspend()
+    {
+        lock (gate)
+        {
+            foreach (var pair in activeVoices)
+            {
+                foreach (var voice in pair.Value)
+                {
+                    mixer?.RemoveMixerInput(voice);
+                }
+                pair.Value.Clear();
+            }
+            activeVoices.Clear();
+            output?.Pause();
+        }
+    }
+
+    /// <summary>Restarts the output device after <see cref="Suspend"/>.</summary>
+    public void ResumeOutput()
+    {
+        lock (gate)
+        {
+            output?.Play();
+        }
+    }
+
     public void SetDeviceVolume(double volume)
     {
         lock (gate)

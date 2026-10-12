@@ -340,6 +340,10 @@ public sealed partial class PlayerPage : Page
 
     private void StartTimers()
     {
+        // Playback may restart from 0, so the throttle markers must not keep the
+        // previous sheet's timeline or every update would be skipped.
+        lastKeyAnimation = -1;
+        lastUiUpdate = -1;
         renderTimer?.Start();
         keyTimer?.Start();
     }

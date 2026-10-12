@@ -63,6 +63,9 @@ public sealed class WaterfallVisualization : IMidiVisualization
         this.notes = notes;
         this.duration = duration;
         viewport = owner;
+        lastHighlight = -1;
+        renderBase = 0;
+        panX = 0;
         ApplyPitchRange();
 
         notesByPitch.Clear();
@@ -150,6 +153,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
     {
         ReleasePressedKeys();
         renderBase = 0;
+        lastHighlight = -1;
         if (transform is not null) transform.Y = 0;
         RenderWindow(0);
         RenderKeybed();

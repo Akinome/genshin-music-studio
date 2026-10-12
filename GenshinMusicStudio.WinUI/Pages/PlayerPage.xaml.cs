@@ -361,6 +361,13 @@ public sealed partial class PlayerPage : Page
 
     private void RenderRoll(string path)
     {
+        // Loading a different sheet must not leave the previous one playing:
+        // the old thread would keep reporting progress against the new timeline.
+        if (!string.Equals(App.Player.CurrentFile, path, StringComparison.OrdinalIgnoreCase))
+        {
+            App.Player.Stop();
+            PlayProgress.Value = 0;
+        }
         try
         {
             (notes, duration) = MidiPlayer.ParseNotes(path);

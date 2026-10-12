@@ -53,6 +53,7 @@ public sealed class MidiPlayer : IDisposable
     public bool IsPlaying => thread is { IsAlive: true } && !stopRequested;
     public bool IsPaused { get; private set; }
     public string? PlayingFolder { get; private set; }
+    public string? CurrentFile { get; private set; }
     public double CurrentDuration => currentDuration;
 
     /// <summary>
@@ -151,6 +152,7 @@ public sealed class MidiPlayer : IDisposable
         Stop();
         CloseSynthesizer();
         PlayingFolder = folder;
+        CurrentFile = files.Count > 0 ? files[0] : null;
         stopRequested = false;
         playlist = files;
         playbackStart = Math.Max(0, startAt);
@@ -203,6 +205,7 @@ public sealed class MidiPlayer : IDisposable
             current.Join(1500);
         }
         PlayingFolder = null;
+        CurrentFile = null;
         PlayingChanged?.Invoke(false);
     }
 

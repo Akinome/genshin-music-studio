@@ -65,6 +65,12 @@ public sealed class MidiPlayer : IDisposable
 
     public InstrumentPlayer? Instrument { get; set; }
 
+    /// <summary>Receives lyre keystrokes so a sheet can be played inside the game.</summary>
+    public GameKeySender? GameOutput { get; set; }
+
+    /// <summary>When true, note-ons are also sent to the game window.</summary>
+    public bool PlayInGame { get; set; }
+
     /// <summary>
     /// Applies an instrument selection only when it is still the newest one.
     /// A null instrument means the Windows MIDI synth; it still counts as a
@@ -206,6 +212,7 @@ public sealed class MidiPlayer : IDisposable
         }
         PlayingFolder = null;
         CurrentFile = null;
+        GameOutput?.ReleaseAll();
         PlayingChanged?.Invoke(false);
     }
 
@@ -333,6 +340,11 @@ public sealed class MidiPlayer : IDisposable
                     if (evt.Time < startFrom - 0.001) continue;
                     if (evt.IsOn)
                     {
+                        if (PlayInGame && GameOutput is not null)
+                        {
+                            var key = Key21Layout.PhysicalKeyForPitch(evt.Pitch);
+                            GameOutput.Tap(string.IsNullOrEmpty(key) ? '\0' : key[0]);
+                        }
                         if (activeInstrument is not null)
                         {
                             activeInstrument.PlayKey(evt.Pitch, Math.Clamp(velocityBoost, 0.1, 1.0));

@@ -28,6 +28,7 @@ public sealed partial class PlayerPage : Page
     private IMidiVisualization? visualization;
     private readonly WaterfallVisualization waterfallMode = new();
     private readonly KeyboardVisualization keyboardMode = new();
+    private readonly GameKeySender gameKeys = new();
 
     public PlayerPage()
     {
@@ -64,6 +65,12 @@ public sealed partial class PlayerPage : Page
         BoostSlider.Value = App.Player.VelocityBoost * 100;
         BoostText.Text = (int)Math.Round(App.Player.VelocityBoost * 100) + "%";
         BoostSlider.ValueChanged += BoostSlider_ValueChanged;
+        var settings = AppSettings.Load();
+        gameKeys.BackgroundMode = settings.PlayInGameBackground ?? false;
+        BackgroundModeCheck.IsChecked = gameKeys.BackgroundMode;
+        InGameButton.IsChecked = settings.PlayInGame ?? false;
+        ApplyGameOutput();
+        UpdateGameWindowStatus();
         if (FilePathBox.Text.Length > 0)
         {
             RenderRoll(FilePathBox.Text);
@@ -79,8 +86,51 @@ public sealed partial class PlayerPage : Page
     private void PlayerPage_Unloaded(object sender, RoutedEventArgs e)
     {
         StopTimers();
+        gameKeys.ReleaseAll();
         App.Player.PlayingChanged -= Player_PlayingChanged;
         App.Player.ProgressChanged -= Player_ProgressChanged;
+    }
+
+    /// <summary>Pushes the current in-game playback selection to the player.</summary>
+    private void ApplyGameOutput()
+    {
+        gameKeys.BackgroundMode = BackgroundModeCheck.IsChecked == true;
+        App.Player.PlayInGame = InGameButton.IsChecked == true;
+        App.Player.GameOutput = InGameButton.IsChecked == true ? gameKeys : null;
+    }
+
+    private void InGameButton_Click(object sender, RoutedEventArgs e)
+    {
+        ApplyGameOutput();
+        UpdateGameWindowStatus();
+        SaveGameSettings();
+    }
+
+    private void BackgroundMode_Changed(object sender, RoutedEventArgs e)
+    {
+        ApplyGameOutput();
+        UpdateGameWindowStatus();
+        SaveGameSettings();
+    }
+
+    private void DetectGame_Click(object sender, RoutedEventArgs e) => UpdateGameWindowStatus();
+
+    private void SaveGameSettings()
+    {
+        var settings = AppSettings.Load();
+        settings.PlayInGame = InGameButton.IsChecked == true;
+        settings.PlayInGameBackground = BackgroundModeCheck.IsChecked == true;
+        AppSettings.Save(settings);
+    }
+
+    private void UpdateGameWindowStatus()
+    {
+        if (gameKeys.RefreshWindow())
+        {
+            GameWindowText.Text = "已连接：" + gameKeys.GameWindowTitle;
+            return;
+        }
+        GameWindowText.Text = InGameButton.IsChecked == true ? "未检测到原神窗口" : string.Empty;
     }
 
     private async void Browse_Click(object sender, RoutedEventArgs e)
@@ -134,6 +184,16 @@ public sealed partial class PlayerPage : Page
         if (notes.Count == 0)
         {
             RenderRoll(path);
+        }
+        if (App.Player.PlayInGame)
+        {
+            // Foreground playback needs the game to own the input queue; the
+            // background mode intentionally leaves the current window alone.
+            if (!gameKeys.BackgroundMode && !gameKeys.FocusGame())
+            {
+                _ = ShowMessageAsync("未找到游戏窗口", "没有检测到原神窗口，无法进行前台弹奏。可改用后台模式，或用「检测游戏窗口」重试。");
+                return;
+            }
         }
         App.Player.Play(new[] { path });
         if (visualization is null) SetMode(waterfallMode);

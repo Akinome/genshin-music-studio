@@ -13,6 +13,8 @@ public sealed class GameKeySender : IDisposable
 {
     private const int WmKeyDown = 0x0100;
     private const int WmKeyUp = 0x0101;
+    private const int WmActivate = 0x0006;
+    private const int WaActive = 1;
     private const uint MapvkVkToVsc = 0;
     private const uint InputKeyboard = 1;
     private const uint KeyEventKeyUp = 0x0002;
@@ -148,7 +150,7 @@ public sealed class GameKeySender : IDisposable
     {
         var virtualKey = char.ToUpperInvariant(key);
         if (virtualKey < 'A' || virtualKey > 'Z') return;
-        if (BackgroundMode && !RefreshWindow()) return;
+        if (BackgroundMode && !HasWindow && !RefreshWindow()) return;
 
         if (!SendKey(virtualKey, down: true)) return;
 
@@ -217,10 +219,19 @@ public sealed class GameKeySender : IDisposable
         if (BackgroundMode)
         {
             if (!HasWindow && !RefreshWindow()) return false;
+            // The game ignores posted keys while it is inactive, so re-activate
+            // it first. This is what makes background play work at all.
+            if (GetForegroundWindow() != GameWindow)
+            {
+                PostMessage(GameWindow, WmActivate, (IntPtr)WaActive, IntPtr.Zero);
+            }
             var scan = (int)MapVirtualKey(virtualKey, MapvkVkToVsc);
             var lParam = 1 | (scan << 16) | (down ? 0 : unchecked((int)0xC0000000));
             var message = down ? WmKeyDown : WmKeyUp;
-            return PostMessage(GameWindow, message, (IntPtr)virtualKey, (IntPtr)lParam);
+            if (PostMessage(GameWindow, message, (IntPtr)virtualKey, (IntPtr)lParam)) return true;
+            // A stale handle means the game restarted; look it up again next time.
+            GameWindow = IntPtr.Zero;
+            return false;
         }
 
         var scanCode = (ushort)MapVirtualKey(virtualKey, MapvkVkToVsc);

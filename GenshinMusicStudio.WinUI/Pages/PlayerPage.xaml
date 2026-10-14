@@ -31,7 +31,7 @@
                         <ToggleButton x:Name="WaterfallModeButton" Content="瀑布流" IsChecked="True" Click="WaterfallMode_Click" />
                         <ToggleButton x:Name="KeyboardModeButton" Content="21键键盘" Click="KeyboardMode_Click" />
                         <ToggleButton x:Name="InGameButton" Content="原神内弹奏" Click="InGameButton_Click" />
-                        <CheckBox x:Name="BackgroundModeCheck" Content="后台" VerticalAlignment="Center" Checked="BackgroundMode_Changed" Unchecked="BackgroundMode_Changed" />
+                        <CheckBox x:Name="BackgroundModeCheck" Content="后台模式(实验)" VerticalAlignment="Center" Checked="BackgroundMode_Changed" Unchecked="BackgroundMode_Changed" />
                         <TextBlock x:Name="GameWindowText" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         <Button Content="检测" Click="DetectGame_Click" />
                     </StackPanel>

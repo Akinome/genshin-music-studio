@@ -16,7 +16,6 @@ public sealed class GameKeySender : IDisposable
     private const uint MapvkVkToVsc = 0;
     private const uint InputKeyboard = 1;
     private const uint KeyEventKeyUp = 0x0002;
-    private const uint KeyEventScanCode = 0x0008;
 
     // Genshin runs on Unity, so its window class is stable across regions.
     private const string UnityWindowClass = "UnityWndClass";
@@ -51,6 +50,10 @@ public sealed class GameKeySender : IDisposable
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hwnd);
+
+    // Games often ignore SetForegroundWindow, but honour this older API.
+    [DllImport("user32.dll")]
+    private static extern void SwitchToThisWindow(IntPtr hwnd, bool altTab);
 
     private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr param);
 
@@ -170,7 +173,12 @@ public sealed class GameKeySender : IDisposable
     {
         if (!RefreshWindow()) return false;
         if (GetForegroundWindow() == GameWindow) return true;
-        return SetForegroundWindow(GameWindow);
+        SwitchToThisWindow(GameWindow, true);
+        Thread.Sleep(120);
+        if (GetForegroundWindow() == GameWindow) return true;
+        SetForegroundWindow(GameWindow);
+        Thread.Sleep(120);
+        return GetForegroundWindow() == GameWindow;
     }
 
     private void EnsureWorker()
@@ -227,7 +235,9 @@ public sealed class GameKeySender : IDisposable
                     {
                         VirtualKey = virtualKey,
                         ScanCode = scanCode,
-                        Flags = down ? KeyEventScanCode : KeyEventScanCode | KeyEventKeyUp,
+                        // Plain virtual-key input matches what WindowsInput does
+                        // and is what the game actually reacts to.
+                        Flags = down ? 0 : KeyEventKeyUp,
                         Time = 0,
                         ExtraInfo = IntPtr.Zero,
                     },

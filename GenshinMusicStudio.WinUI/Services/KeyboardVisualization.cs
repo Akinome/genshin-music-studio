@@ -31,14 +31,6 @@ public sealed class KeyboardVisualization : IMidiVisualization
     private readonly HashSet<int> litKeys = new();
     private double keyWidth = 70;
     private InstrumentLayout layout = new();
-    private TranslateTransform? panTransform;
-    private double panX;
-    private double panMin;
-    private double panMax;
-    private bool dragging;
-    private double dragStartX;
-    private double dragStartPanX;
-    private int activeKeyIndex = -1;
     public event Action<int>? KeyPressed;
     public event Action<int>? KeyReleased;
 
@@ -65,69 +57,17 @@ public sealed class KeyboardVisualization : IMidiVisualization
         }
 
         owner.Children.Clear();
-        // Transparent background makes the whole viewport hit-testable for drags.
-        owner.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-        owner.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnPointerPressed), true);
-        owner.AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler(OnPointerMoved), true);
-        owner.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(OnPointerReleased), true);
-        owner.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler(OnPointerCaptureLost), true);
         keyCanvas = new Canvas
         {
             VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Left,
         };
-        panTransform = new TranslateTransform();
-        keyCanvas.RenderTransform = panTransform;
         owner.Children.Add(keyCanvas);
         BuildKeyboard();
         lastHighlight = -1;
     }
 
+    /// <summary>Re-fits the keybed after the viewport changes size.</summary>
     public void Resize() => BuildKeyboard();
-
-    /// <summary>Mouse drag pans the keybed when it is wider than the viewport.</summary>
-    private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
-    {
-        if (viewport is null || panMax <= panMin) return;
-        var point = e.GetCurrentPoint(viewport);
-        if (e.Pointer.PointerDeviceType == Microsoft.UI.Input.PointerDeviceType.Touch) return;
-        if (!point.Properties.IsLeftButtonPressed) return;
-        dragging = false;
-        dragStartX = point.Position.X;
-        dragStartPanX = panX;
-        viewport.CapturePointer(e.Pointer);
-    }
-
-    private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
-    {
-        if (viewport is null) return;
-        var x = e.GetCurrentPoint(viewport).Position.X;
-        if (!dragging)
-        {
-            // Wait for a small movement so tapping a key still plays it.
-            if (Math.Abs(x - dragStartX) < 4) return;
-            dragging = true;
-            if (activeKeyIndex >= 0)
-            {
-                KeyReleased?.Invoke(activeKeyIndex);
-                activeKeyIndex = -1;
-            }
-        }
-        panX = Math.Clamp(dragStartPanX + (x - dragStartX), panMin, panMax);
-        if (panTransform is not null) panTransform.X = panX;
-        e.Handled = true;
-    }
-
-    private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
-    {
-        dragging = false;
-        viewport?.ReleasePointerCapture(e.Pointer);
-    }
-
-    private void OnPointerCaptureLost(object sender, PointerRoutedEventArgs e)
-    {
-        dragging = false;
-    }
 
     public void Update(double position)
     {
@@ -151,17 +91,9 @@ public sealed class KeyboardVisualization : IMidiVisualization
         if (keyCanvas is null || viewport is null) return;
         var viewportWidth = SafeWidth();
         var columns = layout.Columns;
-        keyWidth = Math.Clamp((viewportWidth - 32) / columns, 48, 120);
+        // Shrink far enough that the keybed always fits: it can no longer be dragged.
+        keyWidth = Math.Clamp((viewportWidth - 32) / columns, 22, 120);
         var keyboardWidth = keyWidth * columns;
-        // Centre when it fits; otherwise allow dragging across the overflow.
-        panMin = Math.Min(0, viewportWidth - keyboardWidth);
-        panMax = Math.Max(0, (viewportWidth - keyboardWidth) / 2);
-        if (keyboardWidth <= viewportWidth)
-        {
-            panX = (viewportWidth - keyboardWidth) / 2;
-        }
-        panX = Math.Clamp(panX, panMin, panMax);
-        if (panTransform is not null) panTransform.X = panX;
         var viewportHeight = SafeHeight();
         var rowHeight = Math.Min((viewportHeight - 20) / 3, keyWidth * 1.2);
         keyCanvas.Width = keyboardWidth;
@@ -219,10 +151,7 @@ public sealed class KeyboardVisualization : IMidiVisualization
             Canvas.SetTop(circle, centerY - diameter / 2);
             circle.PointerPressed += (_, args) =>
             {
-                // When the keybed overflows, dragging wins over tapping a key.
-                if (panMax > panMin) return;
                 args.Handled = true;
-                activeKeyIndex = capturedIndex;
                 circle.Opacity = 1;
                 circle.CapturePointer(args.Pointer);
                 PressKeyVisual(capturedIndex);
@@ -230,14 +159,12 @@ public sealed class KeyboardVisualization : IMidiVisualization
             };
             circle.PointerReleased += (_, args) =>
             {
-                activeKeyIndex = -1;
                 circle.ReleasePointerCapture(args.Pointer);
                 ReleaseKeyVisual(capturedIndex);
                 KeyReleased?.Invoke(capturedIndex);
             };
             circle.PointerCaptureLost += (_, args) =>
             {
-                activeKeyIndex = -1;
                 ReleaseKeyVisual(capturedIndex);
                 KeyReleased?.Invoke(capturedIndex);
             };

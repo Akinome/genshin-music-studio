@@ -301,9 +301,16 @@ public sealed class MidiPlayer : IDisposable
         var startFrom = playbackStart;
         var activeInstrument = Instrument;
         var handleAtStart = IntPtr.Zero;
+        // In-game playback replaces the local sound so the two never overlap.
+        var playLocalAudio = !PlayInGame;
         try
         {
-            if (activeInstrument is null)
+            if (!playLocalAudio)
+            {
+                // Keys go to the game, so make sure no local voice is left sounding.
+                activeInstrument?.Suspend();
+            }
+            else if (activeInstrument is null)
             {
                 if (midiOutOpen(out handle, 0, IntPtr.Zero, IntPtr.Zero, 0) != 0)
                 {
@@ -346,11 +353,11 @@ public sealed class MidiPlayer : IDisposable
                         {
                             GameOutput.KeyDown(downKey);
                         }
-                        if (activeInstrument is not null)
+                        if (playLocalAudio && activeInstrument is not null)
                         {
                             activeInstrument.PlayKey(evt.Pitch, Math.Clamp(velocityBoost, 0.1, 1.0));
                         }
-                        else
+                        else if (playLocalAudio)
                         {
                             midiOutShortMsg(handle, ScaleVelocity(0x90 | (Key21Layout.FoldPitch(evt.Pitch) << 8) | (evt.Velocity << 16), velocityBoost));
                         }
@@ -363,11 +370,11 @@ public sealed class MidiPlayer : IDisposable
                         {
                             GameOutput.KeyUp(upKey);
                         }
-                        if (activeInstrument is not null)
+                        if (playLocalAudio && activeInstrument is not null)
                         {
                             activeInstrument.NoteOff(evt.Pitch);
                         }
-                        else
+                        else if (playLocalAudio)
                         {
                             midiOutShortMsg(handle, 0x80 | (Key21Layout.FoldPitch(evt.Pitch) << 8));
                         }

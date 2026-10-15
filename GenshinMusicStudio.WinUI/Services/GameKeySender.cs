@@ -83,15 +83,10 @@ public sealed class GameKeySender : IDisposable
     }
 
     private readonly object gate = new();
-    private readonly List<(long DueMilliseconds, char Key)> pendingReleases = new();
-    private Thread? releaseWorker;
-    private volatile bool workerRunning;
+    private readonly Dictionary<char, int> heldKeys = new();
 
     /// <summary>Send messages to the window instead of the foreground input queue.</summary>
     public bool BackgroundMode { get; set; }
-
-    /// <summary>How long a key stays pressed, in milliseconds.</summary>
-    public int HoldMilliseconds { get; set; } = 35;
 
     public IntPtr GameWindow { get; private set; } = IntPtr.Zero;
     public string GameWindowTitle { get; private set; } = string.Empty;
@@ -166,31 +161,63 @@ public sealed class GameKeySender : IDisposable
     }
 
     /// <summary>
-    /// Plays one note key. The press is sent immediately and the release is
-    /// queued on a worker thread so playback timing is never blocked.
+    /// Presses a note key. Held until <see cref="KeyUp"/> so the release lands on
+    /// the note's real end time instead of a fixed tap length.
     /// </summary>
-    public void Tap(char key)
+    public void KeyDown(char key)
     {
-        var virtualKey = char.ToUpperInvariant(key);
-        if (virtualKey < 'A' || virtualKey > 'Z') return;
+        var virtualKey = Normalize(key);
+        if (virtualKey == '\0') return;
         if (BackgroundMode && !HasWindow && !RefreshWindow()) return;
 
-        if (!SendKey(virtualKey, down: true)) return;
-
         lock (gate)
         {
-            pendingReleases.Add((Environment.TickCount64 + Math.Clamp(HoldMilliseconds, 5, 500), virtualKey));
+            heldKeys.TryGetValue(virtualKey, out var count);
+            heldKeys[virtualKey] = count + 1;
+            // The key is already down; a second press would not retrigger it and
+            // would desync the release counting.
+            if (count > 0) return;
         }
-        EnsureWorker();
+        SendKey(virtualKey, down: true);
     }
 
-    /// <summary>Releases every key still queued, e.g. when playback stops.</summary>
-    public void ReleaseAll()
+    /// <summary>Releases a note key once every overlapping note for it has ended.</summary>
+    public void KeyUp(char key)
     {
+        var virtualKey = Normalize(key);
+        if (virtualKey == '\0') return;
         lock (gate)
         {
-            pendingReleases.Clear();
+            if (!heldKeys.TryGetValue(virtualKey, out var count)) return;
+            if (count > 1)
+            {
+                heldKeys[virtualKey] = count - 1;
+                return;
+            }
+            heldKeys.Remove(virtualKey);
         }
+        SendKey(virtualKey, down: false);
+    }
+
+    /// <summary>Releases every key still held, e.g. when playback stops.</summary>
+    public void ReleaseAll()
+    {
+        char[] held;
+        lock (gate)
+        {
+            held = heldKeys.Keys.ToArray();
+            heldKeys.Clear();
+        }
+        foreach (var key in held)
+        {
+            SendKey(key, down: false);
+        }
+    }
+
+    private static char Normalize(char key)
+    {
+        var virtualKey = char.ToUpperInvariant(key);
+        return virtualKey is >= 'A' and <= 'Z' ? virtualKey : '\0';
     }
 
     /// <summary>Brings the game to the foreground (needed for foreground playback).</summary>
@@ -204,37 +231,6 @@ public sealed class GameKeySender : IDisposable
         SetForegroundWindow(GameWindow);
         Thread.Sleep(120);
         return GetForegroundWindow() == GameWindow;
-    }
-
-    private void EnsureWorker()
-    {
-        if (releaseWorker is { IsAlive: true }) return;
-        workerRunning = true;
-        releaseWorker = new Thread(ReleaseLoop) { IsBackground = true, Name = "game-key-release" };
-        releaseWorker.Start();
-    }
-
-    private void ReleaseLoop()
-    {
-        while (workerRunning)
-        {
-            char[] due;
-            lock (gate)
-            {
-                var now = Environment.TickCount64;
-                due = pendingReleases.Where(item => item.DueMilliseconds <= now)
-                    .Select(item => item.Key)
-                    .Distinct()
-                    .ToArray();
-                pendingReleases.RemoveAll(item => item.DueMilliseconds <= now);
-            }
-
-            foreach (var key in due)
-            {
-                SendKey(key, down: false);
-            }
-            Thread.Sleep(2);
-        }
     }
 
     private bool SendKey(char virtualKey, bool down)
@@ -310,13 +306,6 @@ public sealed class GameKeySender : IDisposable
 
     public void Dispose()
     {
-        workerRunning = false;
-        try
-        {
-            releaseWorker?.Join(200);
-        }
-        catch
-        {
-        }
+        ReleaseAll();
     }
 }

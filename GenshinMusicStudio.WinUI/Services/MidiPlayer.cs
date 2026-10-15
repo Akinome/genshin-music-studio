@@ -180,6 +180,8 @@ public sealed class MidiPlayer : IDisposable
             current.Join(1500);
         }
         Instrument?.Suspend();
+        // Never leave game keys pressed while paused.
+        GameOutput?.ReleaseAll();
         // Silence the Windows synth too, otherwise its held notes keep ringing
         // and stack up once playback resumes.
         CloseSynthesizer();
@@ -340,10 +342,9 @@ public sealed class MidiPlayer : IDisposable
                     if (evt.Time < startFrom - 0.001) continue;
                     if (evt.IsOn)
                     {
-                        if (PlayInGame && GameOutput is not null)
+                        if (PlayInGame && GameOutput is not null && GameKeyFor(evt.Pitch) is { } downKey)
                         {
-                            var key = Key21Layout.PhysicalKeyForPitch(evt.Pitch);
-                            GameOutput.Tap(string.IsNullOrEmpty(key) ? '\0' : key[0]);
+                            GameOutput.KeyDown(downKey);
                         }
                         if (activeInstrument is not null)
                         {
@@ -354,13 +355,22 @@ public sealed class MidiPlayer : IDisposable
                             midiOutShortMsg(handle, ScaleVelocity(0x90 | (Key21Layout.FoldPitch(evt.Pitch) << 8) | (evt.Velocity << 16), velocityBoost));
                         }
                     }
-                    else if (activeInstrument is not null)
-                    {
-                        activeInstrument.NoteOff(evt.Pitch);
-                    }
                     else
                     {
-                        midiOutShortMsg(handle, 0x80 | (Key21Layout.FoldPitch(evt.Pitch) << 8));
+                        // Release exactly when the note ends so a following note on
+                        // the same key can retrigger instead of being swallowed.
+                        if (PlayInGame && GameOutput is not null && GameKeyFor(evt.Pitch) is { } upKey)
+                        {
+                            GameOutput.KeyUp(upKey);
+                        }
+                        if (activeInstrument is not null)
+                        {
+                            activeInstrument.NoteOff(evt.Pitch);
+                        }
+                        else
+                        {
+                            midiOutShortMsg(handle, 0x80 | (Key21Layout.FoldPitch(evt.Pitch) << 8));
+                        }
                     }
                 }
 
@@ -401,6 +411,13 @@ public sealed class MidiPlayer : IDisposable
             PlayingFolder = null;
             PlayingChanged?.Invoke(false);
         }
+    }
+
+    /// <summary>Lyre key for a pitch, or null when the pitch has no key.</summary>
+    private static char? GameKeyFor(int pitch)
+    {
+        var key = Key21Layout.PhysicalKeyForPitch(pitch);
+        return string.IsNullOrEmpty(key) ? null : key[0];
     }
 
     private void ReportProgress(double position, double duration)

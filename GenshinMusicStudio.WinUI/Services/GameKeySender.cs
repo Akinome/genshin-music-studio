@@ -84,6 +84,7 @@ public sealed class GameKeySender : IDisposable
 
     private readonly object gate = new();
     private readonly Dictionary<char, int> heldKeys = new();
+    private long lastActivateMilliseconds;
 
     /// <summary>Send messages to the window instead of the foreground input queue.</summary>
     public bool BackgroundMode { get; set; }
@@ -178,7 +179,10 @@ public sealed class GameKeySender : IDisposable
             // would desync the release counting.
             if (count > 0) return;
         }
-        SendKey(virtualKey, down: true);
+        if (SendKey(virtualKey, down: true))
+        {
+            LogKey("DOWN " + virtualKey);
+        }
     }
 
     /// <summary>Releases a note key once every overlapping note for it has ended.</summary>
@@ -196,7 +200,10 @@ public sealed class GameKeySender : IDisposable
             }
             heldKeys.Remove(virtualKey);
         }
-        SendKey(virtualKey, down: false);
+        if (SendKey(virtualKey, down: false))
+        {
+            LogKey("UP " + virtualKey);
+        }
     }
 
     /// <summary>Releases every key still held, e.g. when playback stops.</summary>
@@ -210,7 +217,26 @@ public sealed class GameKeySender : IDisposable
         }
         foreach (var key in held)
         {
-            SendKey(key, down: false);
+            if (SendKey(key, down: false))
+            {
+                LogKey("UP " + key + " (release all)");
+            }
+        }
+    }
+
+    private static void LogKey(string text)
+    {
+        try
+        {
+            var dir = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "GenshinMusicStudio");
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(System.IO.Path.Combine(dir, "crash.log"),
+                $"[{DateTime.Now:HH:mm:ss.fff}] GAMEKEY {text}{Environment.NewLine}");
+        }
+        catch
+        {
         }
     }
 
@@ -240,8 +266,11 @@ public sealed class GameKeySender : IDisposable
             if (!HasWindow && !RefreshWindow()) return false;
             // The game ignores posted keys while it is inactive, so re-activate
             // it first. This is what makes background play work at all.
-            if (GetForegroundWindow() != GameWindow)
+            // Rate-limit activation: flooding WM_ACTIVATE disturbs the game.
+            var now = Environment.TickCount64;
+            if (GetForegroundWindow() != GameWindow && now - lastActivateMilliseconds > 250)
             {
+                lastActivateMilliseconds = now;
                 PostMessage(GameWindow, WmActivate, (IntPtr)WaActive, IntPtr.Zero);
             }
             var scan = (int)MapVirtualKey(virtualKey, MapvkVkToVsc);

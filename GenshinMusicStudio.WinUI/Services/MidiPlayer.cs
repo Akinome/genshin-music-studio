@@ -172,6 +172,7 @@ public sealed class MidiPlayer : IDisposable
     {
         if (!IsPlaying) return;
         pausedPosition = CurrentPosition;
+        LogPlayback($"PAUSE at {pausedPosition:F3}s");
         IsPaused = true;
         stopRequested = true;
         var current = thread;
@@ -191,9 +192,17 @@ public sealed class MidiPlayer : IDisposable
     public void Resume()
     {
         if (!IsPaused) return;
+        // Defensive: never let a lingering loop overlap with the resumed one,
+        // otherwise both threads would emit the same keys.
+        var previous = thread;
+        if (previous is { IsAlive: true } && previous != Thread.CurrentThread)
+        {
+            previous.Join(1500);
+        }
         IsPaused = false;
         stopRequested = false;
         playbackStart = pausedPosition;
+        LogPlayback($"RESUME from {playbackStart:F3}s");
         Instrument?.ResumeOutput();
         thread = new Thread(PlayLoop) { IsBackground = true };
         thread.Start();
@@ -346,7 +355,9 @@ public sealed class MidiPlayer : IDisposable
                 while (index < events.Count && events[index].Time - startFrom <= position)
                 {
                     var evt = events[index++];
-                    if (evt.Time < startFrom - 0.001) continue;
+                    // Strictly before the resume point: replaying these would
+                    // retrigger notes that already sounded before the pause.
+                    if (evt.Time < startFrom) continue;
                     if (evt.IsOn)
                     {
                         if (PlayInGame && GameOutput is not null && GameKeyFor(evt.Pitch) is { } downKey)
@@ -425,6 +436,23 @@ public sealed class MidiPlayer : IDisposable
     {
         var key = Key21Layout.PhysicalKeyForPitch(pitch);
         return string.IsNullOrEmpty(key) ? null : key[0];
+    }
+
+    /// <summary>Diagnostic trail for pause/resume investigations.</summary>
+    private static void LogPlayback(string text)
+    {
+        try
+        {
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "GenshinMusicStudio");
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(Path.Combine(dir, "crash.log"),
+                $"[{DateTime.Now:HH:mm:ss.fff}] PLAY {text}{Environment.NewLine}");
+        }
+        catch
+        {
+        }
     }
 
     private void ReportProgress(double position, double duration)

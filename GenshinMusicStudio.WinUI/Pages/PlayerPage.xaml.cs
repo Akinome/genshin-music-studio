@@ -23,12 +23,12 @@ public sealed partial class PlayerPage : Page
     private double lastUiUpdate;
     private double lastHighlight;
     private double lastKeyAnimation;
+    private bool gameWarningShown;
     private DispatcherQueueTimer? renderTimer;
     private DispatcherQueueTimer? keyTimer;
     private IMidiVisualization? visualization;
     private readonly WaterfallVisualization waterfallMode = new();
     private readonly KeyboardVisualization keyboardMode = new();
-    private readonly GameKeySender gameKeys = new();
 
     public PlayerPage()
     {
@@ -66,8 +66,8 @@ public sealed partial class PlayerPage : Page
         BoostText.Text = (int)Math.Round(App.Player.VelocityBoost * 100) + "%";
         BoostSlider.ValueChanged += BoostSlider_ValueChanged;
         var settings = AppSettings.Load();
-        gameKeys.BackgroundMode = settings.PlayInGameBackground ?? false;
-        BackgroundModeCheck.IsChecked = gameKeys.BackgroundMode;
+        App.GameKeys.BackgroundMode = settings.PlayInGameBackground ?? false;
+        BackgroundModeCheck.IsChecked = App.GameKeys.BackgroundMode;
         InGameButton.IsChecked = settings.PlayInGame ?? false;
         ApplyGameOutput();
         UpdateGameWindowStatus();
@@ -86,7 +86,7 @@ public sealed partial class PlayerPage : Page
     private void PlayerPage_Unloaded(object sender, RoutedEventArgs e)
     {
         StopTimers();
-        gameKeys.ReleaseAll();
+        App.GameKeys.ReleaseAll();
         App.Player.PlayingChanged -= Player_PlayingChanged;
         App.Player.ProgressChanged -= Player_ProgressChanged;
     }
@@ -94,9 +94,11 @@ public sealed partial class PlayerPage : Page
     /// <summary>Pushes the current in-game playback selection to the player.</summary>
     private void ApplyGameOutput()
     {
-        gameKeys.BackgroundMode = BackgroundModeCheck.IsChecked == true;
+        App.GameKeys.BackgroundMode = BackgroundModeCheck.IsChecked == true;
         App.Player.PlayInGame = InGameButton.IsChecked == true;
-        App.Player.GameOutput = InGameButton.IsChecked == true ? gameKeys : null;
+        App.Player.GameOutput = App.GameKeys;
+        gameWarningShown = false;
+        App.GameKeys.ClearFailure();
     }
 
     private void InGameButton_Click(object sender, RoutedEventArgs e)
@@ -125,12 +127,36 @@ public sealed partial class PlayerPage : Page
 
     private void UpdateGameWindowStatus()
     {
-        if (gameKeys.RefreshWindow())
+        var elevated = GameKeySender.IsProcessElevated();
+        ElevateButton.Visibility = elevated ? Visibility.Collapsed : Visibility.Visible;
+        if (App.GameKeys.RefreshWindow())
         {
-            GameWindowText.Text = "已连接：" + gameKeys.GameWindowTitle;
+            GameWindowText.Text = elevated
+                ? "已连接：" + App.GameKeys.GameWindowTitle
+                : "已连接，但需要管理员权限";
             return;
         }
         GameWindowText.Text = InGameButton.IsChecked == true ? "未检测到原神窗口" : string.Empty;
+    }
+
+    /// <summary>Relaunches elevated so input can reach the elevated game window.</summary>
+    private void Elevate_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var exe = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(exe)) return;
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe)
+            {
+                UseShellExecute = true,
+                Verb = "runas",
+            });
+            Application.Current.Exit();
+        }
+        catch (Exception ex)
+        {
+            _ = ShowMessageAsync("无法提权", ex.Message);
+        }
     }
 
     private async void Browse_Click(object sender, RoutedEventArgs e)
@@ -187,9 +213,16 @@ public sealed partial class PlayerPage : Page
         }
         if (App.Player.PlayInGame)
         {
+            if (!GameKeySender.IsProcessElevated())
+            {
+                _ = ShowMessageAsync(
+                    "需要管理员权限",
+                    "原神正在以管理员身份运行，本程序需要同等权限才能把按键送进游戏。请点击工具条上的「以管理员身份重启」，重启后再播放。");
+                return;
+            }
             // Foreground playback needs the game to own the input queue; the
             // background mode intentionally leaves the current window alone.
-            if (!gameKeys.BackgroundMode && !gameKeys.FocusGame())
+            if (!App.GameKeys.BackgroundMode && !App.GameKeys.FocusGame())
             {
                 _ = ShowMessageAsync("未找到游戏窗口", "没有检测到原神窗口，无法进行前台弹奏。可改用后台模式，或用「检测游戏窗口」重试。");
                 return;
@@ -392,6 +425,12 @@ public sealed partial class PlayerPage : Page
     private void OnKeyFrame()
     {
         if (!App.Player.IsPlaying) return;
+        if (!gameWarningShown && App.Player.PlayInGame && App.GameKeys.LastFailure is { } failure)
+        {
+            gameWarningShown = true;
+            App.GameKeys.ClearFailure();
+            _ = ShowMessageAsync("无法在原神中弹奏", failure);
+        }
         var position = App.Player.CurrentPosition;
         if (position - lastKeyAnimation < 0.033) return;
         lastKeyAnimation = position;

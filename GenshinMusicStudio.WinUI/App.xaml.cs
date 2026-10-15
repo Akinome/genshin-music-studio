@@ -22,6 +22,7 @@ public partial class App : Application
     public static StudioBackendClient Backend { get; } = new();
     public static MidiPlayer Player { get; } = new();
     public static InstrumentPlayer Instruments { get; } = new();
+    public static GameKeySender GameKeys { get; } = new();
     
     /// <summary>
     /// Initializes the singleton application object.  This is the first line of authored code
@@ -58,10 +59,29 @@ public partial class App : Application
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
         ApplySystemAccent();
+        RestoreInGamePlayback();
         MainWindow = new MainWindow();
         _window = MainWindow;
         _window.Activate();
         RestoreDefaultInstrument();
+    }
+
+    /// <summary>
+    /// Wires the shared game-key sender into the player so in-game playback works
+    /// no matter which page started it.
+    /// </summary>
+    private static void RestoreInGamePlayback()
+    {
+        try
+        {
+            var settings = AppSettings.Load();
+            GameKeys.BackgroundMode = settings.PlayInGameBackground ?? false;
+            Player.PlayInGame = settings.PlayInGame ?? false;
+            Player.GameOutput = GameKeys;
+        }
+        catch
+        {
+        }
     }
 
     /// <summary>

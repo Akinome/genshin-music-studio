@@ -34,6 +34,7 @@
                         <CheckBox x:Name="BackgroundModeCheck" Content="后台模式(实验)" VerticalAlignment="Center" Checked="BackgroundMode_Changed" Unchecked="BackgroundMode_Changed" />
                         <TextBlock x:Name="GameWindowText" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         <Button Content="检测" Click="DetectGame_Click" />
+                        <Button x:Name="ElevateButton" Content="以管理员身份重启" Click="Elevate_Click" Visibility="Collapsed" />
                     </StackPanel>
                     <Grid x:Name="RollViewport" Grid.Row="1" />
                 </Grid>

@@ -97,6 +97,29 @@ public sealed class GameKeySender : IDisposable
     public string GameWindowTitle { get; private set; } = string.Empty;
     public bool HasWindow => GameWindow != IntPtr.Zero;
 
+    /// <summary>Last injection failure, surfaced to the UI so it is not silent.</summary>
+    public string? LastFailure { get; private set; }
+
+    public void ClearFailure() => LastFailure = null;
+
+    /// <summary>
+    /// True when this process runs elevated. Windows blocks input sent from a
+    /// normal process to an elevated window, and Genshin normally runs elevated.
+    /// </summary>
+    public static bool IsProcessElevated()
+    {
+        try
+        {
+            using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+            var principal = new System.Security.Principal.WindowsPrincipal(identity);
+            return principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     /// <summary>Locates the running game window; returns true when one is found.</summary>
     public bool RefreshWindow()
     {
@@ -229,6 +252,10 @@ public sealed class GameKeySender : IDisposable
             var lParam = 1 | (scan << 16) | (down ? 0 : unchecked((int)0xC0000000));
             var message = down ? WmKeyDown : WmKeyUp;
             if (PostMessage(GameWindow, message, (IntPtr)virtualKey, (IntPtr)lParam)) return true;
+            var error = Marshal.GetLastWin32Error();
+            ReportFailure(error == 5
+                ? "系统拒绝了按键投递（错误 5：拒绝访问）。原神以管理员权限运行，本程序也需要以管理员身份运行。"
+                : "按键投递失败，Win32 错误码 " + error + "。");
             // A stale handle means the game restarted; look it up again next time.
             GameWindow = IntPtr.Zero;
             return false;
@@ -255,7 +282,30 @@ public sealed class GameKeySender : IDisposable
                 },
             },
         };
-        return SendInput(1, inputs, Marshal.SizeOf<Input>()) == 1;
+        if (SendInput(1, inputs, Marshal.SizeOf<Input>()) == 1) return true;
+        var sendError = Marshal.GetLastWin32Error();
+        ReportFailure(sendError == 5
+            ? "系统拒绝了按键注入（错误 5：拒绝访问）。原神以管理员权限运行，本程序也需要以管理员身份运行。"
+            : "按键注入失败，Win32 错误码 " + sendError + "。");
+        return false;
+    }
+
+    private void ReportFailure(string message)
+    {
+        if (string.Equals(LastFailure, message, StringComparison.Ordinal)) return;
+        LastFailure = message;
+        try
+        {
+            var dir = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "GenshinMusicStudio");
+            Directory.CreateDirectory(dir);
+            File.AppendAllText(System.IO.Path.Combine(dir, "crash.log"),
+                $"[{DateTime.Now:HH:mm:ss}] GAMEKEY {message}{Environment.NewLine}");
+        }
+        catch
+        {
+        }
     }
 
     public void Dispose()

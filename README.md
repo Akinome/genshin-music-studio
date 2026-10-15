@@ -199,6 +199,24 @@ release\GenshinMusicStudio-win-x64\
 release\GenshinMusicStudio-win-x64.zip
 ```
 
+## 测试与覆盖率
+
+纯业务逻辑集中在 `GenshinMusicStudio.Core`，包括 MIDI 解析、21 键与乐器布局、主旋律提取、MIDI 写出、B 站 wbi 签名和设置序列化。WinUI、音频设备和 Win32 消息发送属于平台集成层，不计入单元测试覆盖率。
+
+运行测试：
+
+```powershell
+dotnet test GenshinMusicStudio.Core.Tests\GenshinMusicStudio.Core.Tests.csproj -c Release
+```
+
+检查 80% 行覆盖率门槛：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\check-coverage.ps1
+```
+
+脚本使用 Coverlet 生成 Cobertura 报告；当前核心库覆盖率明显高于 80%，门槛不通过时脚本会返回失败。
+
 ## 命令行工具
 
 基础 MIDI 转换：
@@ -232,6 +250,8 @@ $env:GENSHIN_BACKUP_DIR = "D:\Music\不可播备份"
 
 ```text
 GenshinMusicStudio.WinUI/   WinUI 3 原生应用
+GenshinMusicStudio.Core/    可测试的 MIDI、布局、编曲与设置逻辑
+GenshinMusicStudio.Core.Tests/  xUnit 单元测试与覆盖场景
 backend/                    Python 后端、模型调用与转换流水线
 tools/                      批量处理、诊断和图标生成工具
 scripts/                    启动和 AI 环境安装脚本

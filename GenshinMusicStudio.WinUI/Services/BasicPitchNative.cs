@@ -3,8 +3,6 @@ using Microsoft.ML.OnnxRuntime.Tensors;
 
 namespace GenshinMusicStudio_WinUI.Services;
 
-public sealed record NativeNote(double Start, double End, int Pitch, double Amplitude);
-
 public sealed class BasicPitchNative : IDisposable
 {
     private const int SampleRate = 22050;

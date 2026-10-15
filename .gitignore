@@ -9,8 +9,16 @@ venv/
 # .NET / WinUI
 GenshinMusicStudio.WinUI/bin/
 GenshinMusicStudio.WinUI/obj/
+GenshinMusicStudio.Core/bin/
+GenshinMusicStudio.Core/obj/
+GenshinMusicStudio.Core.Tests/bin/
+GenshinMusicStudio.Core.Tests/obj/
 NativeInferenceTest/bin/
 NativeInferenceTest/obj/
+
+# Test and coverage output
+TestResults/
+coverage.cobertura.xml
 
 # Reference repositories
 references/

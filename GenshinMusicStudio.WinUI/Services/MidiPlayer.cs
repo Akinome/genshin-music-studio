@@ -5,8 +5,6 @@ namespace GenshinMusicStudio_WinUI.Services;
 
 public sealed class MidiPlayer : IDisposable
 {
-    private const int LowNote = 48;
-    private const int HighNote = 83;
     private const int HarpProgram = 46;
 
     [DllImport("winmm.dll")]
@@ -20,14 +18,6 @@ public sealed class MidiPlayer : IDisposable
 
     [DllImport("winmm.dll")]
     private static extern int midiOutSetVolume(IntPtr handle, uint volume);
-
-    private sealed class MidiEvent
-    {
-        public double Time;
-        public bool IsOn;
-        public int Pitch;
-        public int Velocity;
-    }
 
     public sealed record MidiNote(double Start, double End, int Pitch, int Velocity);
 
@@ -123,33 +113,12 @@ public sealed class MidiPlayer : IDisposable
 
     public static (List<MidiNote> Notes, double Duration) ParseNotes(string path)
     {
-        var (events, duration) = ParseMidiFile(path);
-        var notes = new List<MidiNote>();
-        var active = new Dictionary<int, double>();
-        foreach (var (time, isOn, pitch, velocity) in events)
-        {
-            if (isOn)
-            {
-                if (active.TryGetValue(pitch, out var previousStart))
-                {
-                    notes.Add(new MidiNote(previousStart, time, pitch, 80));
-                }
-                active[pitch] = time;
-            }
-            else if (active.TryGetValue(pitch, out var start))
-            {
-                active.Remove(pitch);
-                if (time - start > 0.001)
-                {
-                    notes.Add(new MidiNote(start, time, pitch, Math.Max(40, velocity)));
-                }
-            }
-        }
-        foreach (var pair in active)
-        {
-            notes.Add(new MidiNote(pair.Value, Math.Max(duration, pair.Value + 0.2), pair.Key, 80));
-        }
-        notes.Sort((a, b) => a.Start.CompareTo(b.Start));
+        // Keep the existing nested model for the visualizers while the actual
+        // parsing and pairing logic lives in the testable core library.
+        var (parsedNotes, duration) = MidiFileParser.ParseNotes(path);
+        var notes = parsedNotes
+            .Select(note => new MidiNote(note.Start, note.End, note.Pitch, note.Velocity))
+            .ToList();
         return (notes, duration);
     }
 
@@ -377,7 +346,7 @@ public sealed class MidiPlayer : IDisposable
                         }
                         else if (playLocalAudio)
                         {
-                            midiOutShortMsg(handle, ScaleVelocity(0x90 | (Key21Layout.FoldPitch(evt.Pitch) << 8) | (evt.Velocity << 16), velocityBoost));
+                            midiOutShortMsg(handle, MidiMessage.ScaleVelocity(0x90 | (Key21Layout.FoldPitch(evt.Pitch) << 8) | (evt.Velocity << 16), velocityBoost));
                         }
                     }
                     else
@@ -477,169 +446,17 @@ public sealed class MidiPlayer : IDisposable
         ProgressChanged?.Invoke(name, position, duration);
     }
 
-    private static List<MidiEvent> BuildPlaylistEvents(IReadOnlyList<string> files, List<(double Start, double Duration)> ranges)
+    private static List<MidiPlaybackEvent> BuildPlaylistEvents(
+        IReadOnlyList<string> files,
+        List<(double Start, double Duration)> ranges)
     {
-        var events = new List<MidiEvent>();
-        var offset = 0.0;
-        foreach (var file in files)
-        {
-            var (fileEvents, duration) = ParseMidiFile(file);
-            ranges.Add((offset, duration));
-            foreach (var (time, isOn, pitch, velocity) in fileEvents)
+        var parsedFiles = files
+            .Select(file =>
             {
-                events.Add(new MidiEvent { Time = offset + time, IsOn = isOn, Pitch = pitch, Velocity = velocity });
-            }
-            offset += duration + 0.6;
-        }
-        events.Sort((a, b) => a.Time.CompareTo(b.Time));
-        return events;
-    }
-
-    private static int FoldMessage(int message)
-    {
-        var status = message & 0xF0;
-        if (status is not (0x90 or 0x80)) return message;
-        var note = (message >> 8) & 0x7F;
-        while (note < LowNote) note += 12;
-        while (note > HighNote) note -= 12;
-        if (status == 0x90)
-        {
-            var velocity = (message >> 16) & 0x7F;
-            return 0x90 | (note << 8) | (velocity << 16);
-        }
-        return 0x80 | (note << 8);
-    }
-
-    private static int ScaleVelocity(int message, double boost)
-    {
-        if ((message & 0xF0) != 0x90 || boost <= 1.0) return message;
-        var velocity = (message >> 16) & 0x7F;
-        var scaled = (int)Math.Min(127, Math.Max(1, Math.Round(velocity * boost)));
-        return (message & 0xFE00FF) | (scaled << 16);
-    }
-
-    private static (List<(double Time, bool IsOn, int Pitch, int Velocity)> Events, double Duration) ParseMidiFile(string path)
-    {
-        var events = new List<(double Time, bool IsOn, int Pitch, int Velocity)>();
-        var bytes = File.ReadAllBytes(path);
-        if (bytes.Length < 14 || bytes[0] != 'M' || bytes[1] != 'T' || bytes[2] != 'h' || bytes[3] != 'd')
-        {
-            throw new InvalidOperationException("不是有效的 MIDI 文件。");
-        }
-
-        var trackCount = ReadUInt16(bytes, 10);
-        var division = ReadUInt16(bytes, 12);
-        var ticksPerBeat = (division & 0x8000) != 0 ? 480 : division;
-        if (ticksPerBeat == 0) ticksPerBeat = 480;
-
-        var position = 14;
-        var tempo = 500000;
-        for (var track = 0; track < trackCount && position < bytes.Length - 8; track++)
-        {
-            if (bytes[position] != 'M' || bytes[position + 1] != 'T' || bytes[position + 2] != 'r' || bytes[position + 3] != 'k')
-            {
-                break;
-            }
-            var length = ReadUInt32(bytes, position + 4);
-            var end = position + 8 + (int)Math.Min(length, int.MaxValue - position - 8);
-            position += 8;
-
-            var tick = 0;
-            var runningStatus = 0;
-            while (position < end)
-            {
-                var delta = ReadVarLen(bytes, ref position, end);
-                tick += delta;
-                if (position >= end) break;
-                var status = (int)bytes[position];
-                if (status < 0x80)
-                {
-                    if (runningStatus == 0) break;
-                    status = runningStatus;
-                }
-                else
-                {
-                    position++;
-                    if (status < 0xF0) runningStatus = status;
-                    else runningStatus = 0;
-                }
-
-                var kind = status & 0xF0;
-                if (status == 0xFF)
-                {
-                    if (position >= end) break;
-                    var metaType = bytes[position++];
-                    var metaLength = ReadVarLen(bytes, ref position, end);
-                    if (metaType == 0x51 && metaLength == 3 && position + 2 < end)
-                    {
-                        tempo = (bytes[position] << 16) | (bytes[position + 1] << 8) | bytes[position + 2];
-                    }
-                    position += metaLength;
-                }
-                else if (status is 0xF0 or 0xF7)
-                {
-                    var sysexLength = ReadVarLen(bytes, ref position, end);
-                    position += sysexLength;
-                }
-                else if (kind is 0x90 or 0x80)
-                {
-                    if (position + 1 >= end) break;
-                    var note = bytes[position] & 0x7F;
-                    var velocity = bytes[position + 1];
-                    position += 2;
-                    if (kind == 0x90 && velocity > 0)
-                    {
-                        events.Add((TicksToSeconds(tick, ticksPerBeat, tempo), true, note, velocity));
-                    }
-                    else
-                    {
-                        events.Add((TicksToSeconds(tick, ticksPerBeat, tempo), false, note, 0));
-                    }
-                }
-                else if (kind is 0xC0 or 0xD0)
-                {
-                    position += 1;
-                }
-                else
-                {
-                    position += 2;
-                }
-            }
-            position = end;
-        }
-
-        events.Sort((a, b) => a.Time.CompareTo(b.Time));
-        var duration = events.Count > 0 ? events[^1].Time : 0;
-        return (events, duration);
-    }
-
-    private static double TicksToSeconds(long tick, int ticksPerBeat, int tempo)
-    {
-        if (ticksPerBeat <= 0) return 0;
-        return tick * tempo / (ticksPerBeat * 1_000_000.0);
-    }
-
-    private static int ReadUInt16(byte[] data, int offset)
-    {
-        if (offset + 1 >= data.Length) return 0;
-        return (data[offset] << 8) | data[offset + 1];
-    }
-
-    private static uint ReadUInt32(byte[] data, int offset)
-    {
-        if (offset + 3 >= data.Length) return 0;
-        return (uint)((data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3]);
-    }
-
-    private static int ReadVarLen(byte[] data, ref int position, int end)
-    {
-        var value = 0;
-        for (var i = 0; i < 4 && position < end; i++)
-        {
-            var b = data[position++];
-            value = (value << 7) | (b & 0x7F);
-            if ((b & 0x80) == 0) break;
-        }
-        return value;
+                var (events, duration) = MidiFileParser.ParseFile(file);
+                return new MidiFileData(events, duration);
+            })
+            .ToList();
+        return MidiPlaylistBuilder.Build(parsedFiles, ranges);
     }
 }

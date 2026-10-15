@@ -1,34 +1,6 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
-
 namespace GenshinMusicStudio_WinUI.Services;
 
-public sealed class AppSettingsData
-{
-    [JsonPropertyName("playable_dir")] public string? PlayableDir { get; set; }
-    [JsonPropertyName("backup_dir")] public string? BackupDir { get; set; }
-    [JsonPropertyName("output_dir")] public string? OutputDir { get; set; }
-    [JsonPropertyName("library_folders")] public List<LibraryFolderData>? LibraryFolders { get; set; }
-    [JsonPropertyName("volume")] public double? Volume { get; set; }
-    [JsonPropertyName("velocity_boost")] public double? VelocityBoost { get; set; }
-    [JsonPropertyName("audio_instrument")] public string? AudioInstrument { get; set; }
-    [JsonPropertyName("play_in_game")] public bool? PlayInGame { get; set; }
-    [JsonPropertyName("play_in_game_background")] public bool? PlayInGameBackground { get; set; }
-    [JsonPropertyName("search_default_yuanqin")] public bool? SearchDefaultYuanQin { get; set; }
-}
-
-public sealed class LibraryFolderData
-{
-    [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
-    [JsonPropertyName("path")] public string Path { get; set; } = string.Empty;
-}
-
-[JsonSerializable(typeof(AppSettingsData))]
-[JsonSerializable(typeof(LibraryFolderData))]
-internal sealed partial class AppSettingsJsonContext : JsonSerializerContext
-{
-}
-
+/// <summary>Reads and writes the user settings file for the WinUI shell.</summary>
 public static class AppSettings
 {
     private static readonly object Gate = new();
@@ -56,7 +28,7 @@ public static class AppSettings
                 if (File.Exists(SettingsPath))
                 {
                     var json = File.ReadAllText(SettingsPath);
-                    cached = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettingsData) ?? new AppSettingsData();
+                    cached = AppSettingsJson.Deserialize(json);
                 }
             }
             catch
@@ -72,27 +44,11 @@ public static class AppSettings
     {
         lock (Gate)
         {
-            File.WriteAllText(SettingsPath, JsonSerializer.Serialize(data, AppSettingsJsonContext.Default.AppSettingsData));
+            File.WriteAllText(SettingsPath, AppSettingsJson.Serialize(data));
             cached = data;
         }
     }
 
     public static List<LibraryFolderData> DefaultLibraryFolders(AppSettingsData settings, string repoRoot)
-    {
-        var folders = new List<LibraryFolderData>();
-        if (!string.IsNullOrWhiteSpace(settings.PlayableDir))
-        {
-            folders.Add(new LibraryFolderData { Name = "推荐谱库", Path = settings.PlayableDir });
-        }
-        if (!string.IsNullOrWhiteSpace(settings.BackupDir))
-        {
-            folders.Add(new LibraryFolderData { Name = "备份谱库", Path = settings.BackupDir });
-        }
-        folders.Add(new LibraryFolderData
-        {
-            Name = "推荐输出",
-            Path = settings.OutputDir ?? Path.Combine(repoRoot, "优化完成_原神可用"),
-        });
-        return folders;
-    }
+        => AppSettingsDefaults.LibraryFolders(settings, repoRoot);
 }

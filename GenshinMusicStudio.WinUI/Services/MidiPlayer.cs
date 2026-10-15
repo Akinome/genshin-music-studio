@@ -45,6 +45,7 @@ public sealed class MidiPlayer : IDisposable
     private double playbackStart;
     private double currentDuration;
     private long instrumentSequence;
+    private int playbackIndex;
 
     public event Action<bool>? PlayingChanged;
     public event Action<string, double, double>? ProgressChanged;
@@ -162,6 +163,7 @@ public sealed class MidiPlayer : IDisposable
         stopRequested = false;
         playlist = files;
         playbackStart = Math.Max(0, startAt);
+        playbackIndex = 0;
         currentDuration = 0;
         thread = new Thread(PlayLoop) { IsBackground = true };
         thread.Start();
@@ -216,6 +218,7 @@ public sealed class MidiPlayer : IDisposable
         pausedPosition = 0;
         playbackStart = 0;
         currentDuration = 0;
+        playbackIndex = 0;
         var current = thread;
         if (current is { IsAlive: true } && current != Thread.CurrentThread)
         {
@@ -346,7 +349,9 @@ public sealed class MidiPlayer : IDisposable
             // device setup time is never counted as playback time.
             var clock = Stopwatch.StartNew();
             playbackClock = clock;
-            var index = 0;
+            // Resume from the exact next event so nothing already played is
+            // replayed (which used to fire a burst of notes after a pause).
+            var index = playbackIndex;
             var lastReport = -1.0;
             while (index < events.Count)
             {
@@ -355,13 +360,15 @@ public sealed class MidiPlayer : IDisposable
                 while (index < events.Count && events[index].Time - startFrom <= position)
                 {
                     var evt = events[index++];
-                    // Strictly before the resume point: replaying these would
-                    // retrigger notes that already sounded before the pause.
-                    if (evt.Time < startFrom) continue;
+                    playbackIndex = index;
+                    // Only skip a real backlog (a jump into the middle of a file);
+                    // events left over from a pause are emitted right away.
+                    if (startFrom > 0 && evt.Time < startFrom - 0.05) continue;
                     if (evt.IsOn)
                     {
                         if (PlayInGame && GameOutput is not null && GameKeyFor(evt.Pitch) is { } downKey)
                         {
+                            LogPlayback($"KEY DOWN {downKey} @ {evt.Time:F3}s");
                             GameOutput.KeyDown(downKey);
                         }
                         if (playLocalAudio && activeInstrument is not null)
@@ -379,6 +386,7 @@ public sealed class MidiPlayer : IDisposable
                         // the same key can retrigger instead of being swallowed.
                         if (PlayInGame && GameOutput is not null && GameKeyFor(evt.Pitch) is { } upKey)
                         {
+                            LogPlayback($"KEY UP {upKey} @ {evt.Time:F3}s");
                             GameOutput.KeyUp(upKey);
                         }
                         if (playLocalAudio && activeInstrument is not null)

@@ -4,6 +4,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $releaseRoot = Join-Path $root "release"
 $appDir = Join-Path $releaseRoot "GenshinMusicStudio-win-x64"
 $zipPath = Join-Path $releaseRoot "GenshinMusicStudio-win-x64.zip"
+$hashPath = Join-Path $releaseRoot "GenshinMusicStudio-win-x64.zip.sha256"
 
 $resolvedRoot = [IO.Path]::GetFullPath($root)
 $resolvedRelease = [IO.Path]::GetFullPath($releaseRoot)
@@ -27,6 +28,9 @@ New-Item -ItemType Directory -Force -Path $appDir | Out-Null
 
 $project = Join-Path $root "GenshinMusicStudio.WinUI\GenshinMusicStudio.WinUI.csproj"
 dotnet build $project -c Release -p:Platform=x64 -p:PublishTrimmed=false -p:PublishReadyToRun=false
+if ($LASTEXITCODE -ne 0) {
+    throw "WinUI release build failed with exit code $LASTEXITCODE."
+}
 $buildDir = Join-Path $root "GenshinMusicStudio.WinUI\bin\x64\Release\net8.0-windows10.0.26100.0\win-x64"
 if (-not (Test-Path -LiteralPath $buildDir)) {
     throw "Release build output was not found: $buildDir"
@@ -63,6 +67,8 @@ if (Test-Path -LiteralPath $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force
 }
 Compress-Archive -Path (Join-Path $appDir "*") -DestinationPath $zipPath -CompressionLevel Optimal
+$zipHash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
+Set-Content -LiteralPath $hashPath -Value "$zipHash  GenshinMusicStudio-win-x64.zip" -Encoding ascii
 
 if (Test-Path -LiteralPath $venvStash) {
     Move-Item -LiteralPath $venvStash -Destination (Join-Path $appDir ".venv-ai")

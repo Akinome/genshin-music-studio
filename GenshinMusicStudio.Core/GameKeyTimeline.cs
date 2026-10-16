@@ -1,28 +1,26 @@
 namespace GenshinMusicStudio.Core;
 
 /// <summary>
-/// Normalizes mapped note events for game-key injection. Genshin only emits a
-/// note on a fresh key-down edge, so overlapping notes on the same key must be
-/// separated by a short release before the next press. This mirrors the fix in
-/// BetterGenshinImpact PR #3747.
+/// 把 MIDI 音符事件整理成原神可接收的按键时间线。
+/// 原神只在检测到“新的按下沿”时发声，所以同一按键发生交叠音符时，
+/// 必须先补一次松开，再发送下一次按下。
+/// 该实现对应 BetterGenshinImpact PR #3747 的修复。
 /// </summary>
 public static class GameKeyTimeline
 {
     private const double RetriggerGapSeconds = 0.030;
 
     /// <summary>
-    /// Adds retrigger releases for overlapping notes on the same physical key
-    /// and drops the corresponding stale releases from the original stream.
+    /// 为同键交叠音符补发重触发松开，并丢弃旧按住对应的过期松开事件。
     /// </summary>
-    /// <param name="events">Raw note events in playlist order.</param>
-    /// <returns>A stable, time-ordered stream with alternating key transitions.</returns>
+    /// <param name="events">播放列表中的原始音符事件。</param>
+    /// <returns>按时间稳定排序、且同键按下和松开交替正确的事件流。</returns>
     public static List<MidiPlaybackEvent> Normalize(IReadOnlyList<MidiPlaybackEvent> events)
     {
         ArgumentNullException.ThrowIfNull(events);
 
-        // OrderBy is stable. Do not add a secondary "KeyUp first" sort: that
-        // would move a generated release behind the press at the same tick and
-        // turn the stream into down/down again.
+        // OrderBy 是稳定排序，不要额外加“松开优先”的二次排序。
+        // 否则补发的松开会被排到同一时刻的按下后面，又会变成连续两次按下。
         var sorted = events.OrderBy(item => item.Time).ToList();
         var activeCounts = new Dictionary<char, int>();
         var holdStarts = new Dictionary<char, double>();
@@ -38,8 +36,8 @@ public static class GameKeyTimeline
             {
                 if (activeCount > 0 && holdStarts.TryGetValue(key.Value, out var holdStart))
                 {
-                    // If there is not enough room for the full 30 ms gap, put
-                    // the release at the press time so it still sorts first.
+                    // 如果距离下一次按下不足 30ms，就把松开放在按下同一时刻。
+                    // 稳定排序仍会保证松开排在下一次按下之前。
                     var retriggerTime = item.Time - RetriggerGapSeconds;
                     result.Add(item with
                     {
@@ -65,8 +63,8 @@ public static class GameKeyTimeline
                     holdStarts.Remove(key.Value);
                 }
 
-                // A stale release belongs to a hold that was already closed by
-                // a generated retrigger release, so it must not be emitted.
+                // 这条松开属于已经被“重触发松开”提前关闭的旧按住，
+                // 因此不能再发送，否则会让后续按下失去配对。
             }
         }
 

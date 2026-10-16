@@ -5,9 +5,9 @@ using System.Text;
 namespace GenshinMusicStudio_WinUI.Services;
 
 /// <summary>
-/// Sends lyre keystrokes to the game window so a sheet can be played in game.
-/// Foreground mode uses SendInput; background mode posts the key messages
-/// straight to the game window so it keeps working while unfocused.
+/// 向原神窗口发送琴键输入。
+/// 前台模式使用 SendInput，后台模式直接向游戏窗口投递按键消息，
+/// 因此在原神失去焦点时仍可继续演奏。
 /// </summary>
 public sealed class GameKeySender : IDisposable
 {
@@ -19,7 +19,7 @@ public sealed class GameKeySender : IDisposable
     private const uint InputKeyboard = 1;
     private const uint KeyEventKeyUp = 0x0002;
 
-    // Genshin runs on Unity, so its window class is stable across regions.
+    // 原神使用 Unity，窗口类名在不同区服和版本中保持一致。
     private const string UnityWindowClass = "UnityWndClass";
     private static readonly string[] GameProcessNames = { "yuanshen", "genshinimpact" };
 
@@ -53,7 +53,7 @@ public sealed class GameKeySender : IDisposable
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hwnd);
 
-    // Games often ignore SetForegroundWindow, but honour this older API.
+    // 游戏经常忽略 SetForegroundWindow，但对这个旧 API 更兼容。
     [DllImport("user32.dll")]
     private static extern void SwitchToThisWindow(IntPtr hwnd, bool altTab);
 
@@ -83,24 +83,26 @@ public sealed class GameKeySender : IDisposable
     }
 
     private readonly object gate = new();
+    // 记录每个物理键当前被多少个交叠音符占用，暂停或停止时才能全部释放。
     private readonly Dictionary<char, int> heldKeys = new();
+    // 限制 WM_ACTIVATE 的发送频率，避免后台模式刷屏影响游戏线程。
     private long lastActivateMilliseconds;
 
-    /// <summary>Send messages to the window instead of the foreground input queue.</summary>
+    /// <summary>为 true 时直接向游戏窗口投递消息，而不是注入前台输入队列。</summary>
     public bool BackgroundMode { get; set; }
 
     public IntPtr GameWindow { get; private set; } = IntPtr.Zero;
     public string GameWindowTitle { get; private set; } = string.Empty;
     public bool HasWindow => GameWindow != IntPtr.Zero;
 
-    /// <summary>Last injection failure, surfaced to the UI so it is not silent.</summary>
+    /// <summary>最近一次按键注入失败信息，用于在界面上显示，避免静默失败。</summary>
     public string? LastFailure { get; private set; }
 
     public void ClearFailure() => LastFailure = null;
 
     /// <summary>
-    /// True when this process runs elevated. Windows blocks input sent from a
-    /// normal process to an elevated window, and Genshin normally runs elevated.
+    /// 当前进程是否以管理员身份运行。
+    /// Windows 会阻止普通权限进程向管理员权限窗口注入输入，而原神通常以管理员权限运行。
     /// </summary>
     public static bool IsProcessElevated()
     {
@@ -116,7 +118,7 @@ public sealed class GameKeySender : IDisposable
         }
     }
 
-    /// <summary>Locates the running game window; returns true when one is found.</summary>
+    /// <summary>查找正在运行的原神窗口，找到后返回 true。</summary>
     public bool RefreshWindow()
     {
         var found = IntPtr.Zero;
@@ -162,8 +164,8 @@ public sealed class GameKeySender : IDisposable
     }
 
     /// <summary>
-    /// Presses a note key. Held until <see cref="KeyUp"/> so the release lands on
-    /// the note's real end time instead of a fixed tap length.
+    /// 按下一个琴键，并保持到 <see cref="KeyUp"/>。
+    /// 松开时间跟随后续音符结束时间，而不是使用固定点击时长。
     /// </summary>
     public void KeyDown(char key)
     {
@@ -176,10 +178,9 @@ public sealed class GameKeySender : IDisposable
         {
             heldKeys.TryGetValue(virtualKey, out var count);
             heldKeys[virtualKey] = count + 1;
-            // Timeline normalization normally inserts the release before this
-            // press. Keep a defensive fallback here so an unexpected overlap
-            // still creates a fresh down edge instead of becoming a swallowed
-            // note that stays held until the end of the overlap chain.
+            // 正常情况下，时间线预处理已经在本次按下前插入松开。
+            // 这里保留兜底逻辑：即使遇到未预料的交叠，也要制造新的按下沿，
+            // 不能把第二次触发吞掉并一直按到整条交叠链结束。
             retrigger = count > 0;
         }
 
@@ -197,7 +198,7 @@ public sealed class GameKeySender : IDisposable
         }
     }
 
-    /// <summary>Releases a note key once every overlapping note for it has ended.</summary>
+    /// <summary>当同一按键的所有交叠音符都结束后，再真正松开该键。</summary>
     public void KeyUp(char key)
     {
         var virtualKey = Normalize(key);
@@ -218,7 +219,7 @@ public sealed class GameKeySender : IDisposable
         }
     }
 
-    /// <summary>Releases every key still held, e.g. when playback stops.</summary>
+    /// <summary>释放所有仍处于按下状态的按键，例如暂停或停止播放时。</summary>
     public void ReleaseAll()
     {
         char[] held;
@@ -258,7 +259,7 @@ public sealed class GameKeySender : IDisposable
         return virtualKey is >= 'A' and <= 'Z' ? virtualKey : '\0';
     }
 
-    /// <summary>Brings the game to the foreground (needed for foreground playback).</summary>
+    /// <summary>把原神切换到前台，仅前台演奏模式需要使用。</summary>
     public bool FocusGame()
     {
         if (!RefreshWindow()) return false;
@@ -276,9 +277,8 @@ public sealed class GameKeySender : IDisposable
         if (BackgroundMode)
         {
             if (!HasWindow && !RefreshWindow()) return false;
-            // The game ignores posted keys while it is inactive, so re-activate
-            // it first. This is what makes background play work at all.
-            // Rate-limit activation: flooding WM_ACTIVATE disturbs the game.
+            // 游戏在非激活状态会忽略投递的按键，所以先补一个激活消息。
+            // 但 WM_ACTIVATE 不能频繁发送，否则会干扰游戏线程。
             var now = Environment.TickCount64;
             if (GetForegroundWindow() != GameWindow && now - lastActivateMilliseconds > 250)
             {
@@ -293,7 +293,7 @@ public sealed class GameKeySender : IDisposable
             ReportFailure(error == 5
                 ? "系统拒绝了按键投递（错误 5：拒绝访问）。原神以管理员权限运行，本程序也需要以管理员身份运行。"
                 : "按键投递失败，Win32 错误码 " + error + "。");
-            // A stale handle means the game restarted; look it up again next time.
+            // 句柄失效通常表示游戏重启，下次发送时重新查找窗口。
             GameWindow = IntPtr.Zero;
             return false;
         }
@@ -310,8 +310,8 @@ public sealed class GameKeySender : IDisposable
                     {
                         VirtualKey = virtualKey,
                         ScanCode = scanCode,
-                        // Plain virtual-key input matches what WindowsInput does
-                        // and is what the game actually reacts to.
+                        // 使用普通虚拟键输入，与 WindowsInput 的行为一致，
+                        // 也是原神实际会响应的输入方式。
                         Flags = down ? 0 : KeyEventKeyUp,
                         Time = 0,
                         ExtraInfo = IntPtr.Zero,

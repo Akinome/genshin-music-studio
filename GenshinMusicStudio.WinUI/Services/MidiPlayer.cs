@@ -313,9 +313,8 @@ public sealed class MidiPlayer : IDisposable
             var events = BuildPlaylistEvents(playlist, fileRanges);
             if (PlayInGame)
             {
-                // Genshin ignores a second key-down while the same key is held.
-                // Normalize overlapping notes before either local or game output
-                // consumes the event stream.
+                // 原神会忽略同一按键仍处于按下状态时的第二次按下。
+                // 在本地或游戏输出消费事件流之前，先补好重触发松开。
                 events = GameKeyTimeline.Normalize(events);
             }
             var total = events.Count > 0 ? events[^1].Time : 0;

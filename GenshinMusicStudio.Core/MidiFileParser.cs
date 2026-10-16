@@ -164,9 +164,9 @@ public static class MidiFileParser
             position = end;
         }
 
-        // Keep the original file order for equal timestamps. In particular,
-        // a note-off may need to stay immediately before a note-on on the same
-        // key so the transport sees a retrigger instead of a duplicate press.
+        // 相同时间点保持 MIDI 文件中的原始顺序。
+        // 同一按键的“松开、按下”必须保持这个顺序，
+        // 否则传输层会把它看成连续两次按下并吞掉一次触发。
         events = events.OrderBy(item => item.Time).ToList();
         var duration = Math.Max(
             events.Count > 0 ? events[^1].Time : 0,

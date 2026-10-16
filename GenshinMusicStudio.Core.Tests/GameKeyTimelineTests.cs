@@ -60,7 +60,7 @@ public sealed class GameKeyTimelineTests
     }
 
     [Fact]
-    public void Normalize_PreservesReleaseBeforePressAtTheSameTimestamp()
+    public void Normalize_MovesReleaseAheadOfPressAtTheSameTimestamp()
     {
         var events = new[]
         {
@@ -73,8 +73,27 @@ public sealed class GameKeyTimelineTests
         var result = GameKeyTimeline.Normalize(events);
 
         Assert.Equal(new[] { true, false, true, false }, result.Select(item => item.IsOn));
-        Assert.Equal(1.0, result[1].Time, 6);
+        Assert.Equal(0.97, result[1].Time, 6);
         Assert.Equal(1.0, result[2].Time, 6);
+    }
+
+    [Fact]
+    public void Normalize_DoesNotMoveReleaseBeforeThePreviousPress()
+    {
+        var events = new[]
+        {
+            On(0.98, 60),
+            Off(1.0, 60),
+            On(1.0, 60),
+            Off(2.0, 60),
+        };
+
+        var result = GameKeyTimeline.Normalize(events);
+
+        Assert.Equal(1.0, result[1].Time, 6);
+        Assert.False(result[1].IsOn);
+        Assert.Equal(1.0, result[2].Time, 6);
+        Assert.True(result[2].IsOn);
     }
 
     [Fact]

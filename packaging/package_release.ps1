@@ -1,10 +1,19 @@
+param(
+    [string]$OutputName = "GenshinMusicStudio-win-x64"
+)
+
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $releaseRoot = Join-Path $root "release"
-$appDir = Join-Path $releaseRoot "GenshinMusicStudio-win-x64"
-$zipPath = Join-Path $releaseRoot "GenshinMusicStudio-win-x64.zip"
-$hashPath = Join-Path $releaseRoot "GenshinMusicStudio-win-x64.zip.sha256"
+if ([string]::IsNullOrWhiteSpace($OutputName) -or
+    $OutputName.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0 -or
+    $OutputName.IndexOf("..", [StringComparison]::Ordinal) -ge 0) {
+    throw "Invalid output name: $OutputName"
+}
+$appDir = Join-Path $releaseRoot $OutputName
+$zipPath = Join-Path $releaseRoot ($OutputName + ".zip")
+$hashPath = Join-Path $releaseRoot ($OutputName + ".zip.sha256")
 
 $resolvedRoot = [IO.Path]::GetFullPath($root)
 $resolvedRelease = [IO.Path]::GetFullPath($releaseRoot)
@@ -68,7 +77,7 @@ if (Test-Path -LiteralPath $zipPath) {
 }
 Compress-Archive -Path (Join-Path $appDir "*") -DestinationPath $zipPath -CompressionLevel Optimal
 $zipHash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
-Set-Content -LiteralPath $hashPath -Value "$zipHash  GenshinMusicStudio-win-x64.zip" -Encoding ascii
+Set-Content -LiteralPath $hashPath -Value "$zipHash  $OutputName.zip" -Encoding ascii
 
 if (Test-Path -LiteralPath $venvStash) {
     Move-Item -LiteralPath $venvStash -Destination (Join-Path $appDir ".venv-ai")

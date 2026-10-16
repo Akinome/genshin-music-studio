@@ -68,6 +68,38 @@ public static class GameKeyTimeline
             }
         }
 
+        // 第二遍处理：如果松开与下一次按下发生在完全相同的时间点，
+        // 原神可能把它们合并成一次重复按下。只有前一次按下更早时，
+        // 才安全地把松开提前 30ms，形成真正可识别的重触发间隔。
+        var previousDown = new Dictionary<char, double>();
+        var previousUpIndex = new Dictionary<char, int>();
+        for (var index = 0; index < result.Count; index++)
+        {
+            var item = result[index];
+            var key = GameKeyForPitch(item.Pitch);
+            if (key is null) continue;
+
+            if (item.IsOn)
+            {
+                if (previousUpIndex.TryGetValue(key.Value, out var upIndex)
+                    && result[upIndex].Time == item.Time
+                    && previousDown.TryGetValue(key.Value, out var downTime))
+                {
+                    var earlyTime = item.Time - RetriggerGapSeconds;
+                    if (earlyTime > downTime)
+                    {
+                        result[upIndex] = result[upIndex] with { Time = earlyTime };
+                    }
+                }
+
+                previousDown[key.Value] = item.Time;
+            }
+            else
+            {
+                previousUpIndex[key.Value] = index;
+            }
+        }
+
         return result.OrderBy(item => item.Time).ToList();
     }
 

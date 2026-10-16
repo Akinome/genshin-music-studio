@@ -171,13 +171,25 @@ public sealed class GameKeySender : IDisposable
         if (virtualKey == '\0') return;
         if (BackgroundMode && !HasWindow && !RefreshWindow()) return;
 
+        var retrigger = false;
         lock (gate)
         {
             heldKeys.TryGetValue(virtualKey, out var count);
             heldKeys[virtualKey] = count + 1;
-            // The key is already down; a second press would not retrigger it and
-            // would desync the release counting.
-            if (count > 0) return;
+            // Timeline normalization normally inserts the release before this
+            // press. Keep a defensive fallback here so an unexpected overlap
+            // still creates a fresh down edge instead of becoming a swallowed
+            // note that stays held until the end of the overlap chain.
+            retrigger = count > 0;
+        }
+
+        if (retrigger)
+        {
+            if (SendKey(virtualKey, down: false))
+            {
+                LogKey("UP " + virtualKey + " (retrigger)");
+            }
+            Thread.Sleep(30);
         }
         if (SendKey(virtualKey, down: true))
         {

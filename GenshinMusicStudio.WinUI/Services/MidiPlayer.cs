@@ -311,6 +311,13 @@ public sealed class MidiPlayer : IDisposable
 
             fileRanges = new List<(double Start, double Duration)>();
             var events = BuildPlaylistEvents(playlist, fileRanges);
+            if (PlayInGame)
+            {
+                // Genshin ignores a second key-down while the same key is held.
+                // Normalize overlapping notes before either local or game output
+                // consumes the event stream.
+                events = GameKeyTimeline.Normalize(events);
+            }
             var total = events.Count > 0 ? events[^1].Time : 0;
             currentDuration = total;
 

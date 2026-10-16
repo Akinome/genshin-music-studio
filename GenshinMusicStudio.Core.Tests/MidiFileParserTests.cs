@@ -97,6 +97,26 @@ public sealed class MidiFileParserTests
     }
 
     [Fact]
+    public void Parse_PreservesReleaseBeforePressAtTheSameTick()
+    {
+        var track = new List<byte>();
+        Add(track, TestMidiBuilder.VarLen(0));
+        Add(track, 0x90, 60, 100);
+        Add(track, TestMidiBuilder.VarLen(240));
+        Add(track, 0x80, 60, 0);
+        Add(track, TestMidiBuilder.VarLen(0));
+        Add(track, 0x90, 60, 100);
+        Add(track, TestMidiBuilder.VarLen(240));
+        Add(track, 0x80, 60, 0);
+
+        var (events, _) = MidiFileParser.Parse(TestMidiBuilder.CreateSingleTrack(track.ToArray()));
+
+        Assert.Equal(new[] { true, false, true, false }, events.Select(item => item.IsOn));
+        Assert.Equal(0.25, events[1].Time, 6);
+        Assert.Equal(0.25, events[2].Time, 6);
+    }
+
+    [Fact]
     public void ParseNotes_RetriggersDuplicateNoteOnAndDropsZeroLengthNotes()
     {
         var track = new List<byte>();

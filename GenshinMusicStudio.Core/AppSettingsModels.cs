@@ -35,6 +35,9 @@ public sealed class AppSettingsData
 
     /// <summary>True when Bilibili searches append the original-lyre hint by default.</summary>
     [JsonPropertyName("search_default_yuanqin")] public bool? SearchDefaultYuanQin { get; set; }
+
+    /// <summary>True when in-game playback pauses once the instrument UI disappears.</summary>
+    [JsonPropertyName("play_in_game_guard")] public bool? PlayInGameGuard { get; set; }
 }
 
 /// <summary>One folder shown in the user's sheet library.</summary>

@@ -23,6 +23,7 @@ public partial class App : Application
     public static MidiPlayer Player { get; } = new();
     public static InstrumentPlayer Instruments { get; } = new();
     public static GameKeySender GameKeys { get; } = new();
+    public static GameInputGuardService InputGuard { get; } = new(Player, GameKeys);
     
     /// <summary>
     /// Initializes the singleton application object.  This is the first line of authored code
@@ -78,6 +79,7 @@ public partial class App : Application
             GameKeys.BackgroundMode = settings.PlayInGameBackground ?? false;
             Player.PlayInGame = settings.PlayInGame ?? false;
             Player.GameOutput = GameKeys;
+            InputGuard.Enabled = settings.PlayInGameGuard ?? false;
         }
         catch
         {

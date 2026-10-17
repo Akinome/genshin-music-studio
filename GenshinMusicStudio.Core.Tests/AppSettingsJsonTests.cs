@@ -22,12 +22,14 @@ public sealed class AppSettingsJsonTests
             PlayInGame = true,
             PlayInGameBackground = true,
             SearchDefaultYuanQin = true,
+            PlayInGameGuard = true,
         };
 
         var json = AppSettingsJson.Serialize(settings);
         var restored = AppSettingsJson.Deserialize(json);
 
         Assert.Contains("\"playable_dir\":\"playable\"", json);
+        Assert.Contains("\"play_in_game_guard\":true", json);
         Assert.Equal(settings.PlayableDir, restored.PlayableDir);
         Assert.Equal(settings.BackupDir, restored.BackupDir);
         Assert.Equal(settings.OutputDir, restored.OutputDir);
@@ -38,6 +40,7 @@ public sealed class AppSettingsJsonTests
         Assert.True(restored.PlayInGame);
         Assert.True(restored.PlayInGameBackground);
         Assert.True(restored.SearchDefaultYuanQin);
+        Assert.True(restored.PlayInGameGuard);
     }
 
     [Theory]

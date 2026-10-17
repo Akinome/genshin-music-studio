@@ -55,6 +55,7 @@ public sealed partial class PlayerPage : Page
     {
         App.Player.PlayingChanged += Player_PlayingChanged;
         App.Player.ProgressChanged += Player_ProgressChanged;
+        App.InputGuard.StatusChanged += InputGuard_StatusChanged;
         LoadAudioOptions();
         VolumeSlider.ValueChanged -= VolumeSlider_ValueChanged;
         VolumeSlider.Value = App.Player.Volume * 100;
@@ -69,6 +70,7 @@ public sealed partial class PlayerPage : Page
         App.GameKeys.BackgroundMode = settings.PlayInGameBackground ?? false;
         BackgroundModeCheck.IsChecked = App.GameKeys.BackgroundMode;
         InGameButton.IsChecked = settings.PlayInGame ?? false;
+        GuardCheck.IsChecked = settings.PlayInGameGuard ?? false;
         ApplyGameOutput();
         UpdateGameWindowStatus();
         if (FilePathBox.Text.Length > 0)
@@ -87,8 +89,15 @@ public sealed partial class PlayerPage : Page
     {
         StopTimers();
         App.GameKeys.ReleaseAll();
+        App.InputGuard.Stop();
+        App.InputGuard.StatusChanged -= InputGuard_StatusChanged;
         App.Player.PlayingChanged -= Player_PlayingChanged;
         App.Player.ProgressChanged -= Player_ProgressChanged;
+    }
+
+    private void InputGuard_StatusChanged(string status)
+    {
+        DispatcherQueue.TryEnqueue(() => GuardText.Text = status);
     }
 
     /// <summary>Pushes the current in-game playback selection to the player.</summary>
@@ -97,8 +106,46 @@ public sealed partial class PlayerPage : Page
         App.GameKeys.BackgroundMode = BackgroundModeCheck.IsChecked == true;
         App.Player.PlayInGame = InGameButton.IsChecked == true;
         App.Player.GameOutput = App.GameKeys;
+        App.InputGuard.Enabled = GuardCheck.IsChecked == true;
         gameWarningShown = false;
         App.GameKeys.ClearFailure();
+        // 守卫只在原神内弹奏时有意义；已经暂停或停止时启动它也不会有副作用。
+        if (App.Player.PlayInGame && App.InputGuard.Enabled && App.Player.IsPlaying)
+        {
+            App.InputGuard.Start();
+        }
+        else
+        {
+            App.InputGuard.Stop();
+        }
+
+        UpdateGuardStatus();
+    }
+
+    private void GuardCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        ApplyGameOutput();
+        SaveGameSettings();
+    }
+
+    /// <summary>刷新守卫相关的界面状态与说明文字。</summary>
+    private void UpdateGuardStatus()
+    {
+        if (InGameButton.IsChecked != true)
+        {
+            GuardText.Text = "仅原神内弹奏时可用";
+            return;
+        }
+
+        if (!App.InputGuard.HasSignature)
+        {
+            GuardText.Text = "播放时自动取样：请先打开乐器界面";
+            return;
+        }
+
+        GuardText.Text = App.InputGuard.Enabled
+            ? $"已启用（{App.InputGuard.SampleCount} 个取样点，退出乐器界面会自动暂停）"
+            : "已关闭";
     }
 
     private void InGameButton_Click(object sender, RoutedEventArgs e)
@@ -122,6 +169,7 @@ public sealed partial class PlayerPage : Page
         var settings = AppSettings.Load();
         settings.PlayInGame = InGameButton.IsChecked == true;
         settings.PlayInGameBackground = BackgroundModeCheck.IsChecked == true;
+        settings.PlayInGameGuard = GuardCheck.IsChecked == true;
         AppSettings.Save(settings);
     }
 
@@ -384,14 +432,21 @@ public sealed partial class PlayerPage : Page
             if (playing)
             {
                 StartTimers();
+                // 守卫跟着演奏跑：暂停、停止或切到本地播放时立即停下的检测。
+                if (App.Player.PlayInGame && App.InputGuard.Enabled)
+                {
+                    App.InputGuard.Start();
+                }
             }
             else if (App.Player.IsPaused)
             {
                 StopTimers();
+                App.InputGuard.Stop();
             }
             else if (!App.Player.IsPlaying)
             {
                 StopTimers();
+                App.InputGuard.Stop();
                 visualization?.Reset();
             }
         });

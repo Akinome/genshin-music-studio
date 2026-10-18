@@ -537,9 +537,15 @@ public sealed partial class PlayerPage : Page
         }
         if (notes.Count == 0)
         {
+            PlayabilityText.Text = "0.0%";
+            PlayabilityDetailText.Text = "没有可统计音符";
             _ = ShowMessageAsync("没有音符", "该 MIDI 文件中没有识别到音符。");
             return;
         }
+        // 选中文件后立即显示，不依赖播放或谱面渲染是否成功。
+        var playability = MidiPlayer.CalculatePlayability(notes);
+        PlayabilityText.Text = playability.RatioText;
+        PlayabilityDetailText.Text = playability.DetailText;
         if (visualization is null) SetMode(waterfallMode);
         else visualization.Initialize(RollViewport, notes, duration);
         LogState("RenderRoll: " + Path.GetFileName(path));

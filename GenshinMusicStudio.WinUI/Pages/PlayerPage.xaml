@@ -12,12 +12,23 @@
             <TextBlock Text="选择 MIDI 文件，瀑布流从上往下落下并播放。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
 
             <Border Padding="16" CornerRadius="12" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">
-                <Grid ColumnSpacing="8">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                    <TextBox x:Name="FilePathBox" PlaceholderText="MIDI 文件路径" />
-                    <Button Grid.Column="1" Content="选择" Click="Browse_Click" />
-                    <Button Grid.Column="2" Content="打开位置" Click="OpenFileLocation_Click" />
-                </Grid>
+                <StackPanel Spacing="10">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="FilePathBox" PlaceholderText="MIDI 文件路径" />
+                        <Button Grid.Column="1" Content="选择" Click="Browse_Click" />
+                        <Button Grid.Column="2" Content="打开位置" Click="OpenFileLocation_Click" />
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="21键可播率" VerticalAlignment="Center" />
+                        <TextBlock x:Name="PlayabilityText" Text="--" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <TextBlock x:Name="PlayabilityDetailText" Text="选择 MIDI 文件后计算" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </StackPanel>
             </Border>
 
             <Border Padding="16" CornerRadius="12" Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource CardStrokeBrush}" BorderThickness="1">

@@ -122,6 +122,18 @@ public sealed class MidiPlayer : IDisposable
         return (notes, duration);
     }
 
+    /// <summary>
+    /// 计算当前谱面在 21 键风物之诗琴上的可播率。
+    /// 这里只把 UI 的 <see cref="MidiNote"/> 映射成核心库需要的音高序列。
+    /// </summary>
+    /// <param name="notes">解析后的谱面音符。</param>
+    /// <returns>可播数量、不可播数量和可播率。</returns>
+    public static MidiPlayability CalculatePlayability(IReadOnlyList<MidiNote> notes)
+    {
+        ArgumentNullException.ThrowIfNull(notes);
+        return MidiPlayabilityCalculator.Analyze(notes.Select(note => note.Pitch));
+    }
+
     public void Play(IReadOnlyList<string> files, string? folder = null, double startAt = 0)
     {
         if (files.Count == 0) return;

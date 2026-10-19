@@ -100,6 +100,31 @@ public static class GameKeyTimeline
             }
         }
 
+        // 第三遍处理：原神按帧轮询键盘状态，同一帧内的多个 KEYDOWN
+        // 可能只保留最后一个。软件内播放可以混音，但游戏内必须把所有
+        // 按下事件拉开到至少 30ms，才能保证和弦和密集音符逐个触发。
+        var nextKeyDownTime = double.NegativeInfinity;
+        var lastScheduledDown = new Dictionary<char, double>();
+        for (var index = 0; index < result.Count; index++)
+        {
+            var item = result[index];
+            var key = GameKeyForPitch(item.Pitch);
+            if (key is null) continue;
+
+            if (item.IsOn)
+            {
+                var scheduledTime = Math.Max(item.Time, nextKeyDownTime);
+                result[index] = item with { Time = scheduledTime };
+                nextKeyDownTime = scheduledTime + RetriggerGapSeconds;
+                lastScheduledDown[key.Value] = scheduledTime;
+            }
+            else if (lastScheduledDown.TryGetValue(key.Value, out var downTime))
+            {
+                // 按下被顺延后，对应松开不能早于按下本身。
+                result[index] = item with { Time = Math.Max(item.Time, downTime + 0.001) };
+            }
+        }
+
         return result.OrderBy(item => item.Time).ToList();
     }
 

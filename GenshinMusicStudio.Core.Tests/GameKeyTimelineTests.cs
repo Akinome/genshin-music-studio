@@ -55,7 +55,7 @@ public sealed class GameKeyTimelineTests
         Assert.Equal(3, result.Count);
         Assert.Equal(0.010, result[1].Time, 6);
         Assert.False(result[1].IsOn);
-        Assert.Equal(0.010, result[2].Time, 6);
+        Assert.Equal(0.030, result[2].Time, 6);
         Assert.True(result[2].IsOn);
     }
 
@@ -92,8 +92,29 @@ public sealed class GameKeyTimelineTests
 
         Assert.Equal(1.0, result[1].Time, 6);
         Assert.False(result[1].IsOn);
-        Assert.Equal(1.0, result[2].Time, 6);
+        Assert.Equal(1.01, result[2].Time, 6);
         Assert.True(result[2].IsOn);
+    }
+
+    [Fact]
+    public void Normalize_SpacesDifferentKeysThatWouldShareTheSameGameFrame()
+    {
+        var events = new[]
+        {
+            On(10.0, 60),
+            On(10.0, 62),
+            On(10.010, 64),
+            Off(11.0, 60),
+            Off(11.0, 62),
+            Off(11.0, 64),
+        };
+
+        var result = GameKeyTimeline.Normalize(events);
+        var downTimes = result.Where(item => item.IsOn).Select(item => item.Time).ToArray();
+
+        Assert.Equal(10.0, downTimes[0], 6);
+        Assert.Equal(10.03, downTimes[1], 6);
+        Assert.Equal(10.06, downTimes[2], 6);
     }
 
     [Fact]

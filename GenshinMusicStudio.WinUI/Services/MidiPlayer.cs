@@ -6,6 +6,8 @@ namespace GenshinMusicStudio_WinUI.Services;
 public sealed class MidiPlayer : IDisposable
 {
     private const int HarpProgram = 46;
+    private const double WindowsSynthVelocityMultiplier = 2.0;
+    private const int WindowsSynthMinimumVelocity = 72;
 
     [DllImport("winmm.dll")]
     private static extern int midiOutOpen(out IntPtr handle, int device, IntPtr callback, IntPtr instance, int flags);
@@ -45,6 +47,7 @@ public sealed class MidiPlayer : IDisposable
     public bool IsPaused { get; private set; }
     public string? PlayingFolder { get; private set; }
     public string? CurrentFile { get; private set; }
+    public double CurrentFileStart { get; private set; }
     public double CurrentDuration => currentDuration;
 
     /// <summary>
@@ -78,9 +81,16 @@ public sealed class MidiPlayer : IDisposable
         }
     }
 
-    public double CurrentPosition => playbackClock is null
-        ? (IsPaused ? pausedPosition : playbackStart)
-        : playbackStart + playbackClock.Elapsed.TotalSeconds;
+    public double CurrentPosition
+    {
+        get
+        {
+            var position = playbackClock is null
+                ? (IsPaused ? pausedPosition : playbackStart)
+                : playbackStart + playbackClock.Elapsed.TotalSeconds;
+            return MidiPlaybackTimeline.ClampToDuration(position, currentDuration);
+        }
+    }
 
     public double Volume
     {
@@ -107,6 +117,10 @@ public sealed class MidiPlayer : IDisposable
             if (opened)
             {
                 midiOutSetVolume(handle, both);
+            }
+            if (manualOpened)
+            {
+                midiOutSetVolume(manualHandle, both);
             }
         }
     }
@@ -141,6 +155,7 @@ public sealed class MidiPlayer : IDisposable
         CloseSynthesizer();
         PlayingFolder = folder;
         CurrentFile = files.Count > 0 ? files[0] : null;
+        CurrentFileStart = 0;
         stopRequested = false;
         playlist = files;
         playbackStart = Math.Max(0, startAt);
@@ -200,6 +215,7 @@ public sealed class MidiPlayer : IDisposable
         playbackStart = 0;
         currentDuration = 0;
         playbackIndex = 0;
+        CurrentFileStart = 0;
         var current = thread;
         if (current is { IsAlive: true } && current != Thread.CurrentThread)
         {
@@ -207,6 +223,7 @@ public sealed class MidiPlayer : IDisposable
         }
         PlayingFolder = null;
         CurrentFile = null;
+        CurrentFileStart = 0;
         GameOutput?.ReleaseAll();
         PlayingChanged?.Invoke(false);
     }
@@ -267,9 +284,12 @@ public sealed class MidiPlayer : IDisposable
                 }
                 manualOpened = true;
                 midiOutShortMsg(manualHandle, 0xC0 | HarpProgram);
+                ConfigureWindowsSynthVolume(manualHandle);
+                ApplyVolume();
             }
             var folded = Key21Layout.FoldPitch(pitch);
-            midiOutShortMsg(manualHandle, 0x90 | (folded << 8) | (velocity << 16));
+            var noteOn = 0x90 | (folded << 8) | (velocity << 16);
+            midiOutShortMsg(manualHandle, ScaleWindowsSynthVelocity(noteOn));
         }
     }
 
@@ -313,6 +333,7 @@ public sealed class MidiPlayer : IDisposable
                 opened = true;
                 handleAtStart = handle;
                 midiOutShortMsg(handle, 0xC0 | HarpProgram);
+                ConfigureWindowsSynthVolume(handle);
                 ApplyVolume();
             }
             else
@@ -344,7 +365,11 @@ public sealed class MidiPlayer : IDisposable
             {
                 if (stopRequested) return;
                 var position = startFrom + clock.Elapsed.TotalSeconds;
-                while (index < events.Count && events[index].Time - startFrom <= position)
+                while (index < events.Count
+                    && MidiPlaybackTimeline.IsEventDue(
+                        events[index].Time,
+                        startFrom,
+                        clock.Elapsed.TotalSeconds))
                 {
                     var evt = events[index++];
                     playbackIndex = index;
@@ -364,7 +389,8 @@ public sealed class MidiPlayer : IDisposable
                         }
                         else if (playLocalAudio)
                         {
-                            midiOutShortMsg(handle, MidiMessage.ScaleVelocity(0x90 | (Key21Layout.FoldPitch(evt.Pitch) << 8) | (evt.Velocity << 16), velocityBoost));
+                            var noteOn = 0x90 | (Key21Layout.FoldPitch(evt.Pitch) << 8) | (evt.Velocity << 16);
+                            midiOutShortMsg(handle, ScaleWindowsSynthVelocity(noteOn));
                         }
                     }
                     else
@@ -426,6 +452,28 @@ public sealed class MidiPlayer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Raises the Windows synthesizer's channel volume and expression to the
+    /// maximum. The General MIDI synthesizer does not always inherit a loud
+    /// default volume from the output device.
+    /// </summary>
+    private static void ConfigureWindowsSynthVolume(IntPtr synthHandle)
+    {
+        // Controller 7 is channel volume; controller 11 is expression.
+        midiOutShortMsg(synthHandle, 0xB0 | (7 << 8) | (127 << 16));
+        midiOutShortMsg(synthHandle, 0xB0 | (11 << 8) | (127 << 16));
+    }
+
+    /// <summary>
+    /// Applies the user's velocity control plus a fixed Windows-synth gain.
+    /// Quiet MIDI notes are lifted so the built-in harp remains audible.
+    /// </summary>
+    private int ScaleWindowsSynthVelocity(int noteOn)
+        => MidiMessage.ScaleVelocityWithFloor(
+            noteOn,
+            velocityBoost * WindowsSynthVelocityMultiplier,
+            WindowsSynthMinimumVelocity);
+
     /// <summary>Lyre key for a pitch, or null when the pitch has no key.</summary>
     private static char? GameKeyFor(int pitch)
     {
@@ -453,14 +501,18 @@ public sealed class MidiPlayer : IDisposable
     private void ReportProgress(double position, double duration)
     {
         var name = string.Empty;
+        var fileStart = 0.0;
         for (var i = fileRanges.Count - 1; i >= 0; i--)
         {
             if (position >= fileRanges[i].Start)
             {
                 name = i < playlist.Count ? playlist[i] : string.Empty;
+                fileStart = fileRanges[i].Start;
                 break;
             }
         }
+        CurrentFile = name.Length > 0 ? name : null;
+        CurrentFileStart = fileStart;
         ProgressChanged?.Invoke(name, position, duration);
     }
 

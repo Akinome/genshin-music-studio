@@ -1,4 +1,5 @@
 using GenshinMusicStudio_WinUI.Services;
+using GenshinMusicStudio.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -29,6 +30,9 @@ public sealed partial class PlayerPage : Page
     private IMidiVisualization? visualization;
     private readonly WaterfallVisualization waterfallMode = new();
     private readonly KeyboardVisualization keyboardMode = new();
+    private readonly PlaybackProgressState progressState = new();
+    private string? renderedSheetFile;
+    private double renderedSheetOffset = -1;
 
     public PlayerPage()
     {
@@ -73,7 +77,21 @@ public sealed partial class PlayerPage : Page
         GuardCheck.IsChecked = settings.PlayInGameGuard ?? false;
         ApplyGameOutput();
         UpdateGameWindowStatus();
-        if (FilePathBox.Text.Length > 0)
+        var pageContext = PlaybackSheetResolver.ResolvePageContext(
+            App.Player.PlayingFolder,
+            App.Player.CurrentFile,
+            App.Player.CurrentFileStart,
+            App.Player.CurrentDuration);
+        if (pageContext is not null && File.Exists(pageContext.FilePath))
+        {
+            FilePathBox.Text = pageContext.FilePath;
+            RenderRoll(
+                pageContext.FilePath,
+                pageContext.TimeOffset,
+                pageContext.TimelineDuration,
+                preservePlayback: true);
+        }
+        else if (FilePathBox.Text.Length > 0)
         {
             RenderRoll(FilePathBox.Text);
         }
@@ -209,7 +227,16 @@ public sealed partial class PlayerPage : Page
 
     private async void Browse_Click(object sender, RoutedEventArgs e)
     {
-        var path = await PickerHelper.PickFileAsync(".mid", ".midi");
+        string? path;
+        try
+        {
+            path = await PickerHelper.PickFileAsync(".mid", ".midi");
+        }
+        catch (Exception ex)
+        {
+            _ = ShowMessageAsync("无法打开文件选择器", ex.Message);
+            return;
+        }
         if (path is null) return;
         FilePathBox.Text = path;
         RenderRoll(path);
@@ -261,16 +288,18 @@ public sealed partial class PlayerPage : Page
         }
         if (App.Player.PlayInGame)
         {
-            if (!GameKeySender.IsProcessElevated())
+            var startResult = GamePlaybackPrerequisites.Check(
+                App.GameKeys,
+                App.Player.PlayInGame,
+                App.GameKeys.BackgroundMode);
+            if (startResult == GamePlaybackStartResult.RequiresAdministrator)
             {
                 _ = ShowMessageAsync(
                     "需要管理员权限",
                     "原神正在以管理员身份运行，本程序需要同等权限才能把按键送进游戏。请点击工具条上的「以管理员身份重启」，重启后再播放。");
                 return;
             }
-            // Foreground playback needs the game to own the input queue; the
-            // background mode intentionally leaves the current window alone.
-            if (!App.GameKeys.BackgroundMode && !App.GameKeys.FocusGame())
+            if (startResult == GamePlaybackStartResult.GameWindowNotFound)
             {
                 _ = ShowMessageAsync("未找到游戏窗口", "没有检测到原神窗口，无法进行前台弹奏。可改用后台模式，或用「检测游戏窗口」重试。");
                 return;
@@ -316,13 +345,16 @@ public sealed partial class PlayerPage : Page
                 AudioBox.Items.Add(new ComboBoxItem { Content = display, Tag = folder });
             }
         }
+        var instrumentsRoot = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "Instruments");
+        var selectedFolder = AudioInstrumentDefaults.Resolve(
+            AppSettings.Load().AudioInstrument,
+            instrumentsRoot);
         AudioBox.SelectedIndex = 0;
-        var saved = AppSettings.Load().AudioInstrument;
-        if (!string.IsNullOrEmpty(saved))
+        if (selectedFolder.Length > 0)
         {
             foreach (var item in AudioBox.Items.OfType<ComboBoxItem>())
             {
-                if (string.Equals(item.Tag?.ToString(), saved, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(item.Tag?.ToString(), selectedFolder, StringComparison.OrdinalIgnoreCase))
                 {
                     AudioBox.SelectedItem = item;
                     break;
@@ -337,14 +369,21 @@ public sealed partial class PlayerPage : Page
         if (AudioBox.SelectedItem is not ComboBoxItem item) return;
         var folder = item.Tag?.ToString() ?? string.Empty;
         if (SelectionMatchesPlayback(folder)) return;
-        var wasPlaying = App.Player.IsPlaying || App.Player.IsPaused;
-        var position = App.Player.CurrentPosition;
-        App.Player.Stop();
+        var continuation = PlaybackContinuation.Capture(
+            App.Player.IsPlaying,
+            App.Player.IsPaused);
+        if (continuation.ShouldPause)
+        {
+            // Keep the native pause state and playback event index intact.
+            // Replaying from a time offset resets the event stream and makes
+            // the waterfall timeline jump after an instrument change.
+            App.Player.Pause();
+        }
         var sequence = App.Instruments.NextLoadSequence();
         if (folder.Length == 0)
         {
             App.Player.SetInstrument(null, sequence);
-            RestartFrom(position, wasPlaying);
+            ResumeAfterInstrumentChange(continuation);
             return;
         }
         PlayButton.IsEnabled = false;
@@ -354,17 +393,17 @@ public sealed partial class PlayerPage : Page
             if (!applied) return;
             App.Player.SetInstrument(App.Instruments, sequence);
             App.Instruments.SetDeviceVolume(App.Player.Volume);
-            RestartFrom(position, wasPlaying);
             if (!IsLoaded) return;
             if (App.Instruments.Layout.IsDrumKit)
             {
                 SetMode(keyboardMode);
             }
-            else if (visualization is not null)
+            else if (visualization == keyboardMode)
             {
                 visualization.Initialize(RollViewport, notes, duration);
             }
             KeyboardModeButton.Content = keyboardMode.Name;
+            ResumeAfterInstrumentChange(continuation);
         }
         catch (Exception ex)
         {
@@ -394,13 +433,10 @@ public sealed partial class PlayerPage : Page
                 StringComparison.OrdinalIgnoreCase);
     }
 
-    private void RestartFrom(double position, bool wasPlaying)
+    private void ResumeAfterInstrumentChange(PlaybackContinuation continuation)
     {
-        if (!wasPlaying || position <= 0.05) return;
-        var path = FilePathBox.Text.Trim();
-        if (path.Length == 0 || !File.Exists(path)) return;
-        App.Player.Play(new[] { path }, null, position);
-        StartTimers();
+        if (!continuation.ShouldResume || !App.Player.IsPaused) return;
+        App.Player.Resume();
     }
 
     private void VolumeSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
@@ -456,8 +492,28 @@ public sealed partial class PlayerPage : Page
     {
         DispatcherQueue.TryEnqueue(() =>
         {
-            TimeText.Text = FormatTime(position) + " / " + FormatTime(Math.Max(duration, total));
-            PlayProgress.Value = total > 0 ? Math.Clamp(position / total * 100, 0, 100) : 0;
+            progressState.UpdateFromPlayer(total);
+            var directoryContext = PlaybackSheetResolver.ResolveDirectoryContext(
+                App.Player.PlayingFolder,
+                App.Player.CurrentFile,
+                App.Player.CurrentFileStart,
+                total);
+            if (directoryContext is not null
+                && File.Exists(directoryContext.FilePath)
+                && (!string.Equals(
+                        renderedSheetFile,
+                        directoryContext.FilePath,
+                        StringComparison.OrdinalIgnoreCase)
+                    || Math.Abs(renderedSheetOffset - directoryContext.TimeOffset) > 0.001))
+            {
+                FilePathBox.Text = directoryContext.FilePath;
+                RenderRoll(
+                    directoryContext.FilePath,
+                    directoryContext.TimeOffset,
+                    directoryContext.TimelineDuration,
+                    preservePlayback: true);
+            }
+            UpdatePlaybackProgress(position, total);
         });
     }
 
@@ -471,10 +527,21 @@ public sealed partial class PlayerPage : Page
             lastUiUpdate = position;
             DispatcherQueue.TryEnqueue(() =>
             {
-                TimeText.Text = FormatTime(position) + " / " + FormatTime(duration);
-                PlayProgress.Value = duration > 0 ? Math.Clamp(position / duration * 100, 0, 100) : 0;
+                var total = progressState.ResolveFrameDuration(
+                    App.Player.CurrentDuration,
+                    duration);
+                UpdatePlaybackProgress(position, total);
             });
         }
+    }
+
+    private void UpdatePlaybackProgress(double position, double total)
+    {
+        var displayDuration = total > 0
+            ? total
+            : progressState.ResolveFrameDuration(App.Player.CurrentDuration, duration);
+        TimeText.Text = FormatTime(position) + " / " + FormatTime(displayDuration);
+        PlayProgress.Value = progressState.CalculatePercent(position, displayDuration);
     }
 
     private void OnKeyFrame()
@@ -517,18 +584,34 @@ public sealed partial class PlayerPage : Page
         StopButton.IsEnabled = playing || paused;
     }
 
-    private void RenderRoll(string path)
+    private void RenderRoll(
+        string path,
+        double timeOffset = 0,
+        double timelineDuration = 0,
+        bool preservePlayback = false)
     {
         // Loading a different sheet must not leave the previous one playing:
         // the old thread would keep reporting progress against the new timeline.
-        if (!string.Equals(App.Player.CurrentFile, path, StringComparison.OrdinalIgnoreCase))
+        if (!preservePlayback
+            && !string.Equals(App.Player.CurrentFile, path, StringComparison.OrdinalIgnoreCase))
         {
             App.Player.Stop();
             PlayProgress.Value = 0;
         }
         try
         {
-            (notes, duration) = MidiPlayer.ParseNotes(path);
+            var (parsedNotes, fileDuration) = MidiFileParser.ParseNotes(path);
+            var timelineNotes = PlaybackSheetResolver.OffsetNotes(parsedNotes, timeOffset);
+            notes = timelineNotes
+                .Select(note => new MidiPlayer.MidiNote(
+                    note.Start,
+                    note.End,
+                    note.Pitch,
+                    note.Velocity))
+                .ToList();
+            duration = timelineDuration > 0 ? timelineDuration : fileDuration;
+            renderedSheetFile = path;
+            renderedSheetOffset = Math.Max(0, timeOffset);
         }
         catch (Exception ex)
         {
@@ -549,7 +632,15 @@ public sealed partial class PlayerPage : Page
         if (visualization is null) SetMode(waterfallMode);
         else visualization.Initialize(RollViewport, notes, duration);
         LogState("RenderRoll: " + Path.GetFileName(path));
-        TimeText.Text = "0:00 / " + FormatTime(duration);
+        if (preservePlayback && App.Player.IsPlaying)
+        {
+            visualization?.Update(App.Player.CurrentPosition);
+            UpdatePlaybackProgress(App.Player.CurrentPosition, duration);
+        }
+        else
+        {
+            TimeText.Text = "0:00 / " + FormatTime(duration);
+        }
     }
 
     private void SetMode(IMidiVisualization mode)

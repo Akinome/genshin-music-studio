@@ -233,6 +233,35 @@ public sealed class MidiFileParserTests
     }
 
     [Fact]
+    public void MidiMessage_ScalesVelocityByReplacementInsteadOfBitwiseOr()
+    {
+        var noteOn = 0x90 | (60 << 8) | (40 << 16);
+
+        var scaled = MidiMessage.ScaleVelocity(noteOn, 2.0);
+
+        Assert.Equal(80, (scaled >> 16) & 0x7F);
+    }
+
+    [Fact]
+    public void MidiMessage_ScaleVelocityWithFloorRaisesQuietWindowsSynthNotes()
+    {
+        var quietNote = 0x90 | (60 << 8) | (40 << 16);
+        var louder = MidiMessage.ScaleVelocityWithFloor(quietNote, 2.0, 72);
+
+        Assert.Equal(80, (louder >> 16) & 0x7F);
+        Assert.Equal(72, (MidiMessage.ScaleVelocityWithFloor(quietNote, 1.0, 72) >> 16) & 0x7F);
+        Assert.Equal(127, (MidiMessage.ScaleVelocityWithFloor(quietNote, 4.0, 72) >> 16) & 0x7F);
+    }
+
+    [Fact]
+    public void MidiMessage_ScaleVelocityWithFloorPreservesNonNoteMessages()
+    {
+        var controlChange = 0xB0 | (7 << 8) | (100 << 16);
+
+        Assert.Equal(controlChange, MidiMessage.ScaleVelocityWithFloor(controlChange, 2.0, 72));
+    }
+
+    [Fact]
     public void MidiPlaylistBuilder_OffsetsFilesAndRecordsRanges()
     {
         var files = new[]

@@ -14,8 +14,6 @@ namespace GenshinMusicStudio_WinUI.Services;
 public sealed class WaterfallVisualization : IMidiVisualization
 {
     private const double PixelsPerSecond = 140;
-    private const double RespawnInterval = 0.5;
-    private const double HighlightInterval = 0.25;
     private const double FixedWhiteKeyWidth = 34;
     private const int DefaultLowPitch = 48;
     private const int DefaultHighPitch = 83;
@@ -30,15 +28,20 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private static readonly string[] NoteNames = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
     private IReadOnlyList<MidiPlayer.MidiNote> notes = Array.Empty<MidiPlayer.MidiNote>();
+    private readonly List<WaterfallNoteTiming> noteTimings = new();
     private readonly Dictionary<int, List<MidiPlayer.MidiNote>> notesByPitch = new();
     private readonly Dictionary<int, Rectangle> keyRects = new();
+    private readonly Dictionary<int, Rectangle> noteRects = new();
+    private readonly HashSet<int> activeNotes = new();
     private readonly HashSet<int> pressedKeys = new();
+    private readonly WaterfallRenderWindow renderWindow = new();
     private double duration;
     private double minPitch = DefaultLowPitch;
     private double maxPitch = DefaultHighPitch;
     private double whiteKeyWidth = 24;
     private double keyboardHeight = 48;
     private Canvas? contentHost;
+    private Canvas? laneCanvas;
     private Canvas? canvas;
     private Canvas? keybed;
     private TranslateTransform? keybedCounter;
@@ -47,9 +50,9 @@ public sealed class WaterfallVisualization : IMidiVisualization
     private double panMin;
     private double panMax;
     private Grid? viewport;
-    private TranslateTransform? transform;
-    private double renderBase;
-    private double lastHighlight;
+    private double lastPosition;
+    private Brush? normalNoteBrush;
+    private Brush? activeNoteBrush;
     private bool dragging;
     private double dragStartX;
     private double dragStartPanX;
@@ -61,12 +64,15 @@ public sealed class WaterfallVisualization : IMidiVisualization
         this.notes = notes;
         this.duration = duration;
         viewport = owner;
-        lastHighlight = -1;
-        renderBase = 0;
+        lastPosition = 0;
         panX = 0;
         ApplyPitchRange();
 
         notesByPitch.Clear();
+        noteTimings.Clear();
+        noteRects.Clear();
+        activeNotes.Clear();
+        renderWindow.Clear();
         foreach (var note in notes)
         {
             if (!notesByPitch.TryGetValue(note.Pitch, out var list))
@@ -75,6 +81,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
                 notesByPitch[note.Pitch] = list;
             }
             list.Add(note);
+            noteTimings.Add(new WaterfallNoteTiming(note.Start, note.End));
         }
 
         owner.Children.Clear();
@@ -94,10 +101,14 @@ public sealed class WaterfallVisualization : IMidiVisualization
         contentHost.RenderTransform = panTransform;
         owner.Children.Add(contentHost);
 
-        // Notes scroll vertically inside the host.
+        // Lane guides stay fixed while the notes move over them.
+        laneCanvas = new Canvas();
+        contentHost.Children.Add(laneCanvas);
+
+        // Note shapes are pooled and repositioned in place. Rebuilding the
+        // whole canvas every half second made active notes flash between the
+        // normal and playing colors.
         canvas = new Canvas();
-        transform = new TranslateTransform();
-        canvas.RenderTransform = transform;
         contentHost.Children.Add(canvas);
 
         // The keybed sits outside the scrolling content so it never moves
@@ -111,7 +122,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
         keybed.RenderTransform = keybedCounter;
         owner.Children.Add(keybed);
 
-        renderBase = 0;
+        RenderLanes();
         RenderWindow(0);
         RenderKeybed();
     }
@@ -121,38 +132,44 @@ public sealed class WaterfallVisualization : IMidiVisualization
         if (canvas is null) return;
         minPitch = DefaultLowPitch;
         maxPitch = DefaultHighPitch;
-        renderBase = 0;
-        if (transform is not null) transform.Y = 0;
+        lastPosition = 0;
+        renderWindow.Clear();
+        noteRects.Clear();
+        activeNotes.Clear();
         var viewportWidth = SafeWidth();
         var contentWidth = GetContentWidth(viewportWidth);
+        if (contentHost is not null)
+        {
+            contentHost.Width = Math.Max(viewportWidth, contentWidth);
+            contentHost.Height = SafeHeight();
+        }
+        if (laneCanvas is not null)
+        {
+            laneCanvas.Width = Math.Max(viewportWidth, contentWidth);
+            laneCanvas.Height = SafeHeight();
+        }
         canvas.Width = Math.Max(viewportWidth, contentWidth);
         canvas.Height = SafeHeight();
         canvas.Children.Clear();
+        RenderLanes();
         RenderKeybed();
     }
 
     public void Update(double position)
     {
-        if (canvas is null || transform is null || viewport is null) return;
-        if (position < renderBase || position - renderBase >= RespawnInterval)
-        {
-            renderBase = Math.Floor(position / RespawnInterval) * RespawnInterval;
-            RenderWindow(renderBase);
-        }
-        transform.Y = (position - renderBase) * PixelsPerSecond;
-        if (position - lastHighlight >= HighlightInterval)
-        {
-            lastHighlight = position;
-            HighlightPlayingNotes(position);
-        }
+        if (canvas is null || viewport is null) return;
+        lastPosition = position;
+        RenderWindow(position);
     }
 
     public void Reset()
     {
         ReleasePressedKeys();
-        renderBase = 0;
-        lastHighlight = -1;
-        if (transform is not null) transform.Y = 0;
+        lastPosition = 0;
+        renderWindow.Clear();
+        noteRects.Clear();
+        activeNotes.Clear();
+        canvas?.Children.Clear();
         RenderWindow(0);
         RenderKeybed();
     }
@@ -164,7 +181,8 @@ public sealed class WaterfallVisualization : IMidiVisualization
     public void Resize()
     {
         if (canvas is null) return;
-        RenderWindow(renderBase);
+        RenderLanes();
+        RenderWindow(lastPosition);
         RenderKeybed();
     }
 
@@ -186,7 +204,7 @@ public sealed class WaterfallVisualization : IMidiVisualization
 
     private void RenderWindow(double baseTime)
     {
-        if (canvas is null) return;
+        if (canvas is null || laneCanvas is null) return;
         var viewportWidth = SafeWidth();
         var viewportHeight = SafeHeight();
         var contentWidth = GetContentWidth(viewportWidth);
@@ -205,12 +223,16 @@ public sealed class WaterfallVisualization : IMidiVisualization
         // Notes stop at the top edge of the keybed, so that edge is the hit line.
         var hitY = canvasHeight - keyboardHeight;
         var windowSeconds = hitY / PixelsPerSecond;
+        var rasterizationScale = viewport?.XamlRoot?.RasterizationScale ?? 1.0;
+        if (rasterizationScale <= 0) rasterizationScale = 1.0;
 
         if (contentHost is not null)
         {
             if (Math.Abs(contentHost.Width - canvasWidth) > 0.5) contentHost.Width = canvasWidth;
             contentHost.Height = canvasHeight;
         }
+        if (Math.Abs(laneCanvas.Width - canvasWidth) > 0.5) laneCanvas.Width = canvasWidth;
+        laneCanvas.Height = canvasHeight;
         if (Math.Abs(canvas.Width - canvasWidth) > 0.5) canvas.Width = canvasWidth;
         canvas.Height = canvasHeight;
         if (keybed is not null)
@@ -218,7 +240,82 @@ public sealed class WaterfallVisualization : IMidiVisualization
             keybed.Width = viewportWidth;
             keybed.Height = keyboardHeight;
         }
-        canvas.Children.Clear();
+
+        var change = renderWindow.Update(noteTimings, baseTime, windowSeconds);
+        foreach (var index in change.Removed)
+        {
+            if (noteRects.Remove(index, out var removed))
+            {
+                canvas.Children.Remove(removed);
+            }
+            activeNotes.Remove(index);
+        }
+
+        normalNoteBrush ??= (Brush)Application.Current.Resources["AccentBlueBrush"];
+        activeNoteBrush ??= new SolidColorBrush(Microsoft.UI.Colors.White);
+
+        foreach (var index in change.Added)
+        {
+            if (index < 0 || index >= notes.Count) continue;
+            var note = notes[index];
+            var rect = new Rectangle
+            {
+                Width = Math.Max(3, LaneWidth(note.Pitch) - 3),
+                Height = Math.Max(6, (note.End - note.Start) * PixelsPerSecond),
+                RadiusX = 3,
+                RadiusY = 3,
+                Fill = normalNoteBrush,
+                Opacity = 0.88,
+                Tag = note,
+            };
+            Canvas.SetLeft(rect, noteLeft + PitchToX(note.Pitch) + 1.5);
+            canvas.Children.Add(rect);
+            noteRects[index] = rect;
+        }
+
+        foreach (var (index, rect) in noteRects)
+        {
+            if (index < 0 || index >= notes.Count) continue;
+            var note = notes[index];
+            var top = hitY - (note.End - baseTime) * PixelsPerSecond;
+            if (rect.RenderTransform is not TranslateTransform noteTransform)
+            {
+                noteTransform = new TranslateTransform();
+                rect.RenderTransform = noteTransform;
+            }
+            noteTransform.Y = SnapToPhysicalPixel(top, rasterizationScale);
+
+            var isActive = baseTime >= note.Start - 0.02 && baseTime <= note.End;
+            if (isActive == activeNotes.Contains(index)) continue;
+            if (isActive)
+            {
+                activeNotes.Add(index);
+            }
+            else
+            {
+                activeNotes.Remove(index);
+            }
+            rect.Fill = isActive ? activeNoteBrush : normalNoteBrush;
+        }
+
+        SyncKeybedPan();
+    }
+
+    /// <summary>
+    /// Renders the vertical pitch guides once per layout. They do not scroll,
+    /// so rebuilding them during playback only introduces unnecessary work.
+    /// </summary>
+    private void RenderLanes()
+    {
+        if (laneCanvas is null) return;
+        var viewportWidth = SafeWidth();
+        var contentWidth = GetContentWidth(viewportWidth);
+        var canvasWidth = Math.Max(viewportWidth, contentWidth);
+        var canvasHeight = SafeHeight();
+
+        laneCanvas.Width = canvasWidth;
+        laneCanvas.Height = canvasHeight;
+        laneCanvas.Children.Clear();
 
         var laneBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(24, 128, 128, 128));
         var landmarkBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(52, 128, 128, 128));
@@ -230,35 +327,14 @@ public sealed class WaterfallVisualization : IMidiVisualization
                 Height = canvasHeight,
                 Fill = pitch % 12 == 0 ? landmarkBrush : laneBrush,
             };
-            Canvas.SetLeft(line, noteLeft + PitchToX(pitch) + LaneWidth(pitch) - 1);
+            Canvas.SetLeft(line, PitchToX(pitch) + LaneWidth(pitch) - 1);
             Canvas.SetTop(line, 0);
-            canvas.Children.Add(line);
+            laneCanvas.Children.Add(line);
         }
-
-        var noteBrush = (Brush)Application.Current.Resources["AccentBlueBrush"];
-        foreach (var note in notes)
-        {
-            if (note.End < baseTime - 0.1) continue;
-            if (note.Start > baseTime + windowSeconds) continue;
-            var top = hitY - (note.End - baseTime) * PixelsPerSecond;
-            if (top > hitY) continue;
-            var rect = new Rectangle
-            {
-                Width = Math.Max(3, LaneWidth(note.Pitch) - 3),
-                Height = Math.Max(6, (note.End - note.Start) * PixelsPerSecond),
-                RadiusX = 3,
-                RadiusY = 3,
-                Fill = noteBrush,
-                Opacity = 0.88,
-                Tag = note,
-            };
-            Canvas.SetLeft(rect, noteLeft + PitchToX(note.Pitch) + 1.5);
-            Canvas.SetTop(rect, top);
-            canvas.Children.Add(rect);
-        }
-
-        SyncKeybedPan();
     }
+
+    private static double SnapToPhysicalPixel(double value, double rasterizationScale) =>
+        Math.Round(value * rasterizationScale, MidpointRounding.AwayFromZero) / rasterizationScale;
 
     /// <summary>Keeps the keybed aligned with the horizontally scrolled sheet.</summary>
     private void SyncKeybedPan()
@@ -462,18 +538,6 @@ public sealed class WaterfallVisualization : IMidiVisualization
             }
         }
         pressedKeys.Clear();
-    }
-
-    private void HighlightPlayingNotes(double position)
-    {
-        if (canvas is null) return;
-        var normal = (Brush)Application.Current.Resources["AccentBlueBrush"];
-        var active = new SolidColorBrush(Microsoft.UI.Colors.White);
-        foreach (var child in canvas.Children)
-        {
-            if (child is not Rectangle rect || rect.Tag is not MidiPlayer.MidiNote note) continue;
-            rect.Fill = position >= note.Start - 0.02 && position <= note.End ? active : normal;
-        }
     }
 
     private double GetContentWidth(double viewportWidth)

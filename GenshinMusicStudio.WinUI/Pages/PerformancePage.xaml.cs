@@ -88,13 +88,16 @@ public sealed partial class PerformancePage : Page
                 AudioBox.Items.Add(new ComboBoxItem { Content = display, Tag = folder });
             }
         }
-        var saved = AppSettings.Load().AudioInstrument;
+        var instrumentsRoot = Path.Combine(AppContext.BaseDirectory, "Assets", "Instruments");
+        var selectedFolder = AudioInstrumentDefaults.Resolve(
+            AppSettings.Load().AudioInstrument,
+            instrumentsRoot);
         AudioBox.SelectedIndex = 0;
-        if (!string.IsNullOrEmpty(saved))
+        if (selectedFolder.Length > 0)
         {
             foreach (var item in AudioBox.Items.OfType<ComboBoxItem>())
             {
-                if (string.Equals(item.Tag?.ToString(), saved, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(item.Tag?.ToString(), selectedFolder, StringComparison.OrdinalIgnoreCase))
                 {
                     AudioBox.SelectedItem = item;
                     break;
@@ -109,11 +112,18 @@ public sealed partial class PerformancePage : Page
         if (AudioBox.SelectedItem is not ComboBoxItem item) return;
         var folder = item.Tag?.ToString() ?? string.Empty;
         if (SelectionMatchesPlayback(folder)) return;
-        App.Player.Stop();
+        var continuation = PlaybackContinuation.Capture(
+            App.Player.IsPlaying,
+            App.Player.IsPaused);
+        if (continuation.ShouldPause)
+        {
+            App.Player.Pause();
+        }
         var sequence = App.Instruments.NextLoadSequence();
         if (folder.Length == 0)
         {
             App.Player.SetInstrument(null, sequence);
+            ResumeAfterInstrumentChange(continuation);
             return;
         }
         try
@@ -126,6 +136,7 @@ public sealed partial class PerformancePage : Page
             {
                 keyboard.Initialize(KeyboardViewport, Array.Empty<MidiPlayer.MidiNote>(), 0);
             }
+            ResumeAfterInstrumentChange(continuation);
         }
         catch (Exception ex)
         {
@@ -135,6 +146,12 @@ public sealed partial class PerformancePage : Page
         var settings = AppSettings.Load();
         settings.AudioInstrument = folder;
         AppSettings.Save(settings);
+    }
+
+    private static void ResumeAfterInstrumentChange(PlaybackContinuation continuation)
+    {
+        if (!continuation.ShouldResume || !App.Player.IsPaused) return;
+        App.Player.Resume();
     }
 
     private static bool SelectionMatchesPlayback(string folder)

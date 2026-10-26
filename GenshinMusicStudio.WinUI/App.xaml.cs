@@ -110,12 +110,15 @@ public partial class App : Application
     {
         try
         {
-            var saved = AppSettings.Load().AudioInstrument;
-            if (string.IsNullOrEmpty(saved) || !Directory.Exists(saved)) return;
+            var instrumentsRoot = Path.Combine(AppContext.BaseDirectory, "Assets", "Instruments");
+            var selected = AudioInstrumentDefaults.Resolve(
+                AppSettings.Load().AudioInstrument,
+                instrumentsRoot);
+            if (selected.Length == 0 || !Directory.Exists(selected)) return;
             var sequence = App.Instruments.NextLoadSequence();
             Task.Run(() =>
             {
-                if (!App.Instruments.LoadInstrument(saved, sequence)) return;
+                if (!App.Instruments.LoadInstrument(selected, sequence)) return;
                 App.Player.SetInstrument(App.Instruments, sequence);
                 App.Instruments.SetDeviceVolume(App.Player.Volume);
             });

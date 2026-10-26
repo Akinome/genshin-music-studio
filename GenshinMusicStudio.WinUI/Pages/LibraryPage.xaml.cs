@@ -102,6 +102,24 @@ public sealed partial class LibraryPage : Page
             _ = ShowMessageAsync("没有找到 MIDI", "该目录中没有 MIDI 文件。");
             return;
         }
+        var startResult = GamePlaybackPrerequisites.Check(
+            App.GameKeys,
+            App.Player.PlayInGame,
+            App.GameKeys.BackgroundMode);
+        if (startResult == GamePlaybackStartResult.RequiresAdministrator)
+        {
+            _ = ShowMessageAsync(
+                "需要管理员权限",
+                "原神正在以管理员身份运行，本程序需要同等权限才能把按键送进游戏。请到播放页面点击工具条上的「以管理员身份重启」，重启后再播放。");
+            return;
+        }
+        if (startResult == GamePlaybackStartResult.GameWindowNotFound)
+        {
+            _ = ShowMessageAsync(
+                "未找到游戏窗口",
+                "没有检测到原神窗口，无法进行前台弹奏。可改用后台模式，或在播放页面用「检测游戏窗口」重试。");
+            return;
+        }
         playingFolder = folder.Path;
         App.Player.Play(files, folder.Path);
         RenderLibrary();

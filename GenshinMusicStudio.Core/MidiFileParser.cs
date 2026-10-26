@@ -239,7 +239,24 @@ public static class MidiMessage
         if ((message & 0xF0) != 0x90 || boost <= 1.0) return message;
         var velocity = (message >> 16) & 0x7F;
         var scaled = (int)Math.Min(127, Math.Max(1, Math.Round(velocity * boost)));
-        return (message & 0xFE00FF) | (scaled << 16);
+        return (message & 0x0000FFFF) | (scaled << 16);
+    }
+
+    /// <summary>
+    /// Scales note-on velocity and raises quiet notes to a minimum level.
+    /// </summary>
+    /// <param name="message">Packed MIDI short message.</param>
+    /// <param name="boost">Velocity multiplier.</param>
+    /// <param name="minimumVelocity">Minimum resulting velocity.</param>
+    /// <returns>A note-on message with velocity clamped to the MIDI range.</returns>
+    public static int ScaleVelocityWithFloor(int message, double boost, int minimumVelocity)
+    {
+        if ((message & 0xF0) != 0x90) return message;
+
+        var velocity = (message >> 16) & 0x7F;
+        var scaled = (int)Math.Round(velocity * Math.Max(1.0, boost));
+        scaled = Math.Clamp(scaled, Math.Clamp(minimumVelocity, 1, 127), 127);
+        return (message & 0x0000FFFF) | (scaled << 16);
     }
 }
 

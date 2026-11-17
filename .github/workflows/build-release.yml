@@ -1,0 +1,106 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, for example v0.5.4"
+        required: true
+        type: string
+      release_name:
+        description: "Release title shown on GitHub"
+        required: false
+        type: string
+      release_notes:
+        description: "Release notes, including the list of fixed bugs (leave empty to use CHANGELOG.md)"
+        required: false
+        type: string
+      draft:
+        description: "Create the release as a draft"
+        required: false
+        default: false
+        type: boolean
+      prerelease:
+        description: "Mark the release as a prerelease"
+        required: false
+        default: false
+        type: boolean
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: "release-${{ github.event.inputs.version || github.ref_name }}"
+  cancel-in-progress: false
+
+jobs:
+  build-release:
+    name: Build Windows x64 and publish Release
+    runs-on: windows-2025
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Configure Git identity
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Build and test
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ github.event.inputs.version || github.ref_name }}
+        run: |
+          ./packaging/build_release.ps1 -Version $env:RELEASE_VERSION -SkipRelease
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: GenshinMusicStudio-win-x64
+          path: |
+            release/GenshinMusicStudio-win-x64.zip
+            release/GenshinMusicStudio-win-x64.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ github.event.inputs.version || github.ref_name }}
+          RELEASE_NAME: ${{ github.event.inputs.release_name }}
+          RELEASE_NOTES: ${{ github.event.inputs.release_notes }}
+          RELEASE_DRAFT: ${{ github.event.inputs.draft || false }}
+          RELEASE_PRERELEASE: ${{ github.event.inputs.prerelease || false }}
+        run: |
+          $arguments = @{
+            Version = $env:RELEASE_VERSION
+            SkipBuild = $true
+          }
+          if (-not [string]::IsNullOrWhiteSpace($env:RELEASE_NAME)) {
+            $arguments.ReleaseName = $env:RELEASE_NAME
+          }
+          if (-not [string]::IsNullOrWhiteSpace($env:RELEASE_NOTES)) {
+            $arguments.ReleaseNotes = $env:RELEASE_NOTES
+          }
+          if ($env:RELEASE_DRAFT -eq "true") {
+            $arguments.Draft = $true
+          }
+          if ($env:RELEASE_PRERELEASE -eq "true") {
+            $arguments.Prerelease = $true
+          }
+
+          ./packaging/build_release.ps1 @arguments

@@ -213,6 +213,54 @@ release\GenshinMusicStudio-win-x64\
 release\GenshinMusicStudio-win-x64.zip
 ```
 
+### 自动构建与发布
+
+仓库使用 GitHub Actions 自动构建 Windows x64 发布包并上传到 GitHub Release：
+
+1. 在 `CHANGELOG.md` 中新增与版本号对应的章节，例如 `## v0.5.4 - 2026-11-18`，并写明修复的 Bug。
+2. 推送版本标签：
+
+   ```powershell
+   git tag -a v0.5.4 -m "Release v0.5.4"
+   git push origin v0.5.4
+   ```
+
+   `Build and Release` 工作流会自动运行测试、构建、校验 SHA256，并创建正式 Release。
+
+也可以在 GitHub 仓库的 **Actions → Build and Release → Run workflow** 中手动运行，填写版本号和 Release 说明。若标签不存在，工作流会在当前提交创建并推送标签。
+
+Release 附件包括：
+
+```text
+GenshinMusicStudio-win-x64.zip
+GenshinMusicStudio-win-x64.zip.sha256
+```
+
+本地也可以使用同一套 Builder 脚本。发布到 GitHub 前需要先执行 `gh auth login`：
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File packaging\build_release.ps1 `
+  -Version v0.5.4 `
+  -ReleaseNotes "修复播放时间轴、瀑布流渲染和原神内弹奏问题。"
+```
+
+只构建、不发布：
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File packaging\build_release.ps1 `
+  -Version v0.5.4 `
+  -SkipRelease
+```
+
+发布前检查将要执行的 Git 和 GitHub 命令：
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File packaging\build_release.ps1 `
+  -Version v0.5.4 `
+  -SkipBuild `
+  -DryRun
+```
+
 ## 测试与覆盖率
 
 纯业务逻辑集中在 `GenshinMusicStudio.Core`，包括 MIDI 解析、21 键与乐器布局、主旋律提取、MIDI 写出、B 站 wbi 签名和设置序列化。WinUI、音频设备和 Win32 消息发送属于平台集成层，不计入单元测试覆盖率。

@@ -40,10 +40,20 @@ dotnet build $project -c Release -p:Platform=x64 -p:PublishTrimmed=false -p:Publ
 if ($LASTEXITCODE -ne 0) {
     throw "WinUI release build failed with exit code $LASTEXITCODE."
 }
-$buildDir = Join-Path $root "GenshinMusicStudio.WinUI\bin\x64\Release\net8.0-windows10.0.26100.0\win-x64"
-if (-not (Test-Path -LiteralPath $buildDir)) {
-    throw "Release build output was not found: $buildDir"
+$buildRoot = Join-Path $root "GenshinMusicStudio.WinUI\bin\x64\Release"
+$buildCandidates = @(
+    Get-ChildItem -LiteralPath $buildRoot -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like "net8.0-windows*" } |
+        ForEach-Object { Join-Path $_.FullName "win-x64" } |
+        Where-Object {
+            (Test-Path -LiteralPath (Join-Path $_ "GenshinMusicStudio.WinUI.exe") -PathType Leaf)
+        } |
+        Sort-Object -Descending
+)
+if ($buildCandidates.Count -eq 0) {
+    throw "Release build output was not found under: $buildRoot"
 }
+$buildDir = $buildCandidates[0]
 Copy-Item -Path (Join-Path $buildDir "*") -Destination $appDir -Recurse -Force
 Get-ChildItem -LiteralPath $appDir -Recurse -Filter "*.pdb" -File | Remove-Item -Force
 
